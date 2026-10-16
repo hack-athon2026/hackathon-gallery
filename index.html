@@ -138,6 +138,33 @@
     }
     .car-nav button:disabled { opacity: .35; cursor: default; }
 
+    /* ===== 캐러셀 슬라이드 글자 모션 ===== */
+    /* 1번째 슬라이드: 위에서 통통 떨어짐 */
+    .anim-fall.play .slide-emoji { animation: fallIn .6s cubic-bezier(.22,1.4,.36,1) both; }
+    .anim-fall.play h2           { animation: fallIn .6s .12s cubic-bezier(.22,1.4,.36,1) both; }
+    .anim-fall.play p            { animation: fallIn .6s .24s cubic-bezier(.22,1.4,.36,1) both; }
+    @keyframes fallIn {
+      from { opacity: 0; transform: translateY(-56px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    /* 2번째 슬라이드: 갑자기 팝! 하고 나타남 */
+    .anim-pop.play .slide-emoji { animation: popIn .28s cubic-bezier(.34,1.56,.64,1) both; }
+    .anim-pop.play h2           { animation: popIn .28s .07s cubic-bezier(.34,1.56,.64,1) both; }
+    .anim-pop.play p            { animation: popIn .28s .14s cubic-bezier(.34,1.56,.64,1) both; }
+    @keyframes popIn {
+      from { opacity: 0; transform: scale(.5); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+    /* 3번째 슬라이드: 타자기 (글자 입력은 JS, 여기선 깜빡이는 커서만) */
+    .anim-type.play .slide-emoji { animation: popIn .3s cubic-bezier(.34,1.56,.64,1) both; }
+    .anim-type .typing::after {
+      content: ''; display: inline-block;
+      width: 2px; height: 1em; margin-left: 3px;
+      background: #7dd3fc; vertical-align: -0.12em;
+      animation: caretBlink .7s steps(1) infinite;
+    }
+    @keyframes caretBlink { 50% { opacity: 0; } }
+
     /* ===== 갤러리 ===== */
     header {
       background: linear-gradient(135deg, #4f46e5, #7c3aed);
@@ -185,6 +212,7 @@
       .intro-title { animation: none; }
       .slides-track { transition: none; }
       #helpBubble { animation: none; }
+      .slide.play .slide-emoji, .slide.play h2, .slide.play p { animation: none; }
     }
   </style>
 </head>
@@ -279,6 +307,7 @@
 
     function goGallery() {
       stopRain();
+      stopTypewriter();
       introScreen.classList.add('hidden');
       carouselScreen.classList.add('hidden');
       homeBtn.classList.add('show');
@@ -297,6 +326,7 @@
       carouselScreen.classList.remove('hidden');
     }
     function closeCarousel() {
+      stopTypewriter();
       carouselScreen.classList.add('hidden');
       if (introVisible()) startRain();
     }
@@ -389,11 +419,11 @@
       const slides = getSlides();
       slideCount = slides.length;
       const track = document.getElementById('slidesTrack');
-      track.innerHTML = slides.map(s =>
-        '<div class="slide">' +
+      track.innerHTML = slides.map((s, i) =>
+        '<div class="slide ' + SLIDE_ANIMS[i % SLIDE_ANIMS.length] + '">' +
           (s.emoji ? '<div class="slide-emoji">' + esc(s.emoji) + '</div>' : '') +
-          '<h2>' + esc(s.title) + '</h2>' +
-          '<p>' + esc(s.body) + '</p>' +
+          '<h2 data-full="' + esc(s.title) + '">' + esc(s.title) + '</h2>' +
+          '<p data-full="' + esc(s.body) + '">' + esc(s.body) + '</p>' +
         '</div>'
       ).join('');
       document.getElementById('dots').innerHTML =
@@ -414,6 +444,60 @@
       // 갤러리에서 연 경우엔 "돌아가기", 첫 화면에서 연 경우엔 "갤러리 입장하기"
       document.getElementById('nextBtn').textContent = !last ? '다음'
         : (introVisible() ? '갤러리 입장하기' : '돌아가기');
+      playSlideAnim(slideIndex);
+    }
+
+    /* ---------- 슬라이드 글자 모션 ---------- */
+    // 슬라이드마다 다른 효과: 1번째 위에서 떨어짐, 2번째 팝, 3번째 타자기 (순환)
+    const SLIDE_ANIMS = ['anim-fall', 'anim-pop', 'anim-type'];
+    let typeTimer = null;
+
+    function stopTypewriter() {
+      if (typeTimer) { clearInterval(typeTimer); typeTimer = null; }
+      document.querySelectorAll('#slidesTrack .typing').forEach(el =>
+        el.classList.remove('typing'));
+    }
+
+    // 슬라이드가 보일 때마다 효과를 처음부터 다시 재생
+    function playSlideAnim(i) {
+      stopTypewriter();
+      const track = document.getElementById('slidesTrack');
+      const slide = track.children[i];
+      if (!slide) return;
+      Array.from(track.children).forEach(s => s.classList.remove('play'));
+      // 타자기 도중에 나갔던 슬라이드는 원문부터 복구
+      slide.querySelectorAll('[data-full]').forEach(el => {
+        el.textContent = el.dataset.full;
+      });
+      if (reduceMotion) { slide.classList.add('play'); return; }
+      void slide.offsetWidth;  // 리플로우로 CSS 애니메이션 재시작
+      slide.classList.add('play');
+      if (slide.classList.contains('anim-type')) startTypewriter(slide);
+    }
+
+    // 3번째 슬라이드: 타자기처럼 한 글자씩 다다다닥
+    function startTypewriter(slide) {
+      const targets = [slide.querySelector('h2'), slide.querySelector('p')]
+        .filter(Boolean);
+      if (!targets.length) return;
+      const queue = targets.map(el => ({
+        el, chars: Array.from(el.dataset.full || el.textContent)
+      }));
+      queue.forEach(t => { t.el.textContent = ''; });
+      let ti = 0, ci = 0;
+      queue[0].el.classList.add('typing');
+      typeTimer = setInterval(() => {
+        const t = queue[ti];
+        t.el.textContent += t.chars[ci++];
+        if (ci >= t.chars.length) {
+          t.el.classList.remove('typing');
+          ti++; ci = 0;
+          if (ti >= queue.length) {
+            clearInterval(typeTimer); typeTimer = null; return;
+          }
+          queue[ti].el.classList.add('typing');
+        }
+      }, 40);
     }
 
     document.getElementById('prevBtn').addEventListener('click', () => showSlide(slideIndex - 1));
