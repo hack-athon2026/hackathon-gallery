@@ -10,6 +10,7 @@
       font-family: 'Pretendard', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
       background: #f5f6f8; color: #222; line-height: 1.6;
     }
+    button { font-family: inherit; }
 
     /* ===== 인트로 (매트릭스 모션) ===== */
     #intro-screen {
@@ -38,19 +39,73 @@
       from { text-shadow: 0 0 8px #0f0, 0 0 24px #0a0; }
       to   { text-shadow: 0 0 18px #4f4, 0 0 60px #0c0; }
     }
-    .enter-btn {
+    .big-btn {
       margin-top: 36px; padding: 16px 44px;
       font-size: 1.1rem; font-weight: 700; color: #001600;
       background: #21d921; border: none; border-radius: 999px;
       cursor: pointer; box-shadow: 0 0 18px rgba(33,217,33,.65);
     }
-    .enter-btn:active { transform: scale(.96); }
+    .big-btn:active { transform: scale(.96); }
     .skip-link {
       display: block; margin: 18px auto 0; background: none; border: none;
       color: #6c6; font-size: .85rem; text-decoration: underline;
       cursor: pointer;
     }
-    #intro-screen.hidden { display: none; }
+    #intro-screen.hidden, #carousel-screen.hidden { display: none; }
+
+    /* ===== 설명 캐러셀 ===== */
+    #carousel-screen {
+      position: fixed; inset: 0; z-index: 40;
+      background: linear-gradient(160deg, #050810, #0d1b2a 60%, #111827);
+      color: #eef2f8;
+      display: flex; flex-direction: column;
+    }
+    .car-skip {
+      align-self: flex-end; margin: 14px 16px 0;
+      background: none; border: none; color: #7f8ba0;
+      font-size: .85rem; text-decoration: underline; cursor: pointer;
+    }
+    .slides-wrap {
+      flex: 1; overflow: hidden; position: relative;
+      touch-action: pan-y;
+    }
+    .slides-track {
+      display: flex; height: 100%;
+      transition: transform .35s ease;
+    }
+    .slide {
+      min-width: 100%; height: 100%;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center; padding: 24px 28px;
+    }
+    .slide-emoji { font-size: 3rem; margin-bottom: 18px; }
+    .slide h2 {
+      font-size: clamp(1.4rem, 6vw, 2rem); margin-bottom: 16px;
+      color: #7dd3fc;
+    }
+    .slide p {
+      max-width: 560px; font-size: clamp(.98rem, 4.2vw, 1.12rem);
+      color: #cdd6e4; white-space: pre-line;
+    }
+    .car-ui { padding: 12px 20px 26px; text-align: center; }
+    .dots { display: flex; gap: 8px; justify-content: center; margin-bottom: 14px; }
+    .dots span {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #3a465c; transition: background .2s;
+    }
+    .dots span.on { background: #7dd3fc; }
+    .car-nav { display: flex; gap: 10px; justify-content: center; }
+    .car-nav button {
+      padding: 13px 26px; border-radius: 999px; font-size: 1rem;
+      font-weight: 700; cursor: pointer; border: 1px solid #3a465c;
+      background: #1b2537; color: #cdd6e4;
+    }
+    .car-nav button.primary {
+      background: #21d921; border-color: #21d921; color: #001600;
+      box-shadow: 0 0 14px rgba(33,217,33,.5);
+    }
+    .car-nav button:disabled { opacity: .35; cursor: default; }
 
     /* ===== 갤러리 ===== */
     header {
@@ -97,21 +152,38 @@
 
     @media (prefers-reduced-motion: reduce) {
       .intro-title { animation: none; }
+      .slides-track { transition: none; }
     }
   </style>
 </head>
 <body>
-  <!-- 인트로 화면: 매트릭스 스타일 디지털 레인 -->
+  <!-- 1단계: 인트로 (매트릭스 모션) -->
   <div id="intro-screen" role="dialog" aria-label="해커톤 갤러리 입장 화면">
     <canvas id="rain" aria-hidden="true"></canvas>
     <div class="intro-content">
-      <div class="intro-title">해커톤</div>
-      <div class="intro-sub">HACKATHON GALLERY</div>
-      <button class="enter-btn" id="enterBtn">갤러리 입장하기</button>
-      <button class="skip-link" id="skipBtn">건너뛰기</button>
+      <div class="intro-title" id="eventTitle">1st SCH Hackathon</div>
+      <div class="intro-sub" id="eventDate">2026.10.24 토요일</div>
+      <button class="big-btn" id="introNext">다음</button>
+      <button class="skip-link" id="skipBtn">갤러리 바로가기</button>
     </div>
   </div>
 
+  <!-- 2단계: 해커톤 설명 캐러셀 -->
+  <div id="carousel-screen" class="hidden" role="dialog" aria-label="해커톤 소개">
+    <button class="car-skip" id="skipBtn2">건너뛰고 갤러리로</button>
+    <div class="slides-wrap" id="slidesWrap">
+      <div class="slides-track" id="slidesTrack"></div>
+    </div>
+    <div class="car-ui">
+      <div class="dots" id="dots"></div>
+      <div class="car-nav">
+        <button id="prevBtn">이전</button>
+        <button id="nextBtn" class="primary">다음</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3단계: 갤러리 -->
   <header>
     <h1>해커톤 작품 갤러리</h1>
     <p id="intro">불러오는 중...</p>
@@ -127,27 +199,65 @@
     // ============================================
     const API_URL = '여기에_앱스스크립트_exec_주소_붙여넣기';
 
-    /* ---------- 인트로: 매트릭스 디지털 레인 ---------- */
-    (function () {
-      const screen = document.getElementById('intro-screen');
-      const reduceMotion = window.matchMedia &&
-        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // 시트 '소개' 탭: A1=소개 문구, A2=대회 이름, A3=날짜 (비어 있으면 아래 기본값 사용)
+    // 시트 '설명' 탭: 제목|내용을 한 줄에 한 장씩 적으면 기본 슬라이드 대신 그 내용이 나옵니다.
+    const DEFAULT_SLIDES = [
+      { emoji: '💡', title: '해커톤이 뭐예요?',
+        body: '해커톤은 정해진 시간 안에\n팀이 힘을 합쳐 아이디어를\n직접 만들어 보는 축제예요.\n\n코딩 대회가 아니라\n"만드는 즐거움"을 나누는 자리입니다.' },
+      { emoji: '🛠️', title: '이렇게 진행돼요',
+        body: '1. 주제와 규칙을 함께 확인해요\n2. 모둠별로 만들 것을 정해요\n3. 상상하던 것을 직접 만들어요\n4. 완성품을 모두 앞에서 소개해요\n\n일시: 2026.10.24 토요일\n장소와 시간은 선생님 공지를 확인해 주세요.' },
+      { emoji: '🚀', title: '여러분도 할 수 있어요',
+        body: '못해도 괜찮아요.\n해커톤의 진짜 상은\n"내가 직접 만들었다"는 경험이에요.\n\n완성된 작품은 이 갤러리에 전시돼요.\n여러분의 첫 작품을 기대할게요!' }
+    ];
 
-      // 이미 입장한 적 있거나(같은 탭 세션) 모션 줄이기 설정이면 바로 갤러리
+    let data = null;
+    let cbSeq = 0;
+    const reduceMotion = window.matchMedia &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;',
+        '"': '&quot;', "'": '&#39;'
+      }[c]));
+    }
+
+    /* ---------- 화면 전환 ---------- */
+    const introScreen = document.getElementById('intro-screen');
+    const carouselScreen = document.getElementById('carousel-screen');
+
+    function goGallery() {
+      stopRain();
+      introScreen.classList.add('hidden');
+      carouselScreen.classList.add('hidden');
+      sessionStorage.setItem('hk_entered', '1');
+    }
+    function goCarousel() {
+      stopRain();
+      introScreen.classList.add('hidden');
+      carouselScreen.classList.remove('hidden');
+      buildCarousel();
+    }
+
+    /* ---------- 1단계: 인트로 디지털 레인 ---------- */
+    let rafId = null;
+    function stopRain() {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+    (function initIntro() {
       if (reduceMotion || sessionStorage.getItem('hk_entered') === '1') {
-        screen.classList.add('hidden');
+        introScreen.classList.add('hidden');
         return;
       }
-
       const canvas = document.getElementById('rain');
       const ctx = canvas.getContext('2d');
-      // 일본어 가타카나 + 숫자 (매트릭스 특유의 문자열)
       const CHARS = 'アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789';
-      let columns = [], fontSize = 16, rafId = null, lastDraw = 0;
+      let columns = [], fontSize = 16, lastDraw = 0;
 
       function resize() {
-        canvas.width = screen.clientWidth;
-        canvas.height = screen.clientHeight;
+        canvas.width = introScreen.clientWidth;
+        canvas.height = introScreen.clientHeight;
         fontSize = Math.max(14, Math.floor(canvas.width / 28));
         const count = Math.ceil(canvas.width / fontSize);
         columns = Array.from({ length: count },
@@ -155,10 +265,9 @@
         ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
-
       function draw(ts) {
         rafId = requestAnimationFrame(draw);
-        if (ts - lastDraw < 66) return;   // 약 15fps: 배터리 부담 ↓, 특유의 속도감 유지
+        if (ts - lastDraw < 66) return;   // 약 15fps: 배터리 부담 ↓
         lastDraw = ts;
         ctx.fillStyle = 'rgba(0,0,0,0.12)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -172,43 +281,84 @@
           columns[i]++;
         }
       }
-
-      function stopRain() {
-        if (rafId) cancelAnimationFrame(rafId);
-        rafId = null;
-      }
-
-      function enter() {
-        stopRain();
-        screen.classList.add('hidden');
-        sessionStorage.setItem('hk_entered', '1');
-      }
-
-      document.getElementById('enterBtn').addEventListener('click', enter);
-      document.getElementById('skipBtn').addEventListener('click', enter);
       document.addEventListener('visibilitychange', () => {
         if (document.hidden) { stopRain(); }
-        else if (!screen.classList.contains('hidden') && !rafId) {
+        else if (!introScreen.classList.contains('hidden') && !rafId) {
           rafId = requestAnimationFrame(draw);
         }
       });
       window.addEventListener('resize', resize);
-
       resize();
       rafId = requestAnimationFrame(draw);
     })();
 
-    /* ---------- 갤러리 ---------- */
-    let data = null;
-    let cbSeq = 0;
+    document.getElementById('introNext').addEventListener('click', goCarousel);
+    document.getElementById('skipBtn').addEventListener('click', goGallery);
+    document.getElementById('skipBtn2').addEventListener('click', goGallery);
 
-    function esc(s) {
-      return String(s).replace(/[&<>"']/g, c => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;',
-        '"': '&quot;', "'": '&#39;'
-      }[c]));
+    /* ---------- 2단계: 설명 캐러셀 ---------- */
+    let slideIndex = 0;
+    let slideCount = 0;
+
+    function getSlides() {
+      return (data && data.slides && data.slides.length)
+        ? data.slides : DEFAULT_SLIDES;
     }
 
+    function buildCarousel() {
+      const slides = getSlides();
+      slideCount = slides.length;
+      const track = document.getElementById('slidesTrack');
+      track.innerHTML = slides.map(s =>
+        '<div class="slide">' +
+          (s.emoji ? '<div class="slide-emoji">' + esc(s.emoji) + '</div>' : '') +
+          '<h2>' + esc(s.title) + '</h2>' +
+          '<p>' + esc(s.body) + '</p>' +
+        '</div>'
+      ).join('');
+      document.getElementById('dots').innerHTML =
+        slides.map((_, i) => '<span data-i="' + i + '"></span>').join('');
+      document.querySelectorAll('#dots span').forEach(d =>
+        d.addEventListener('click', () => showSlide(+d.dataset.i)));
+      showSlide(0);
+    }
+
+    function showSlide(i) {
+      slideIndex = Math.max(0, Math.min(i, slideCount - 1));
+      document.getElementById('slidesTrack').style.transform =
+        'translateX(-' + (slideIndex * 100) + '%)';
+      document.querySelectorAll('#dots span').forEach((d, j) =>
+        d.classList.toggle('on', j === slideIndex));
+      document.getElementById('prevBtn').disabled = (slideIndex === 0);
+      const last = (slideIndex === slideCount - 1);
+      document.getElementById('nextBtn').textContent = last ? '갤러리 입장하기' : '다음';
+    }
+
+    document.getElementById('prevBtn').addEventListener('click', () => showSlide(slideIndex - 1));
+    document.getElementById('nextBtn').addEventListener('click', () => {
+      if (slideIndex >= slideCount - 1) goGallery();
+      else showSlide(slideIndex + 1);
+    });
+
+    // 스와이프
+    (function () {
+      const wrap = document.getElementById('slidesWrap');
+      let startX = null;
+      wrap.addEventListener('touchstart', e => { startX = e.touches[0].clientX; }, { passive: true });
+      wrap.addEventListener('touchend', e => {
+        if (startX === null) return;
+        const dx = e.changedTouches[0].clientX - startX;
+        startX = null;
+        if (dx <= -40) {
+          if (slideIndex >= slideCount - 1) goGallery();
+          else showSlide(slideIndex + 1);
+        } else if (dx >= 40) {
+          showSlide(slideIndex - 1);
+        }
+      }, { passive: true });
+    })();
+
+    /* ---------- 3단계: 갤러리 ---------- */
     // Apps Script 웹앱을 JSONP로 호출합니다 (도메인이 달라도 동작).
     function fetchGallery(season, onDone) {
       const cbName = '__galleryCb' + (++cbSeq);
@@ -250,10 +400,17 @@
           return;
         }
         data = res;
+        if (res.eventTitle) document.getElementById('eventTitle').textContent = res.eventTitle;
+        if (res.eventDate) document.getElementById('eventDate').textContent = res.eventDate;
         document.getElementById('intro').textContent =
           res.intro || '학생들이 직접 기획하고 만든 작품을 소개합니다.';
         renderSeasonBar();
         renderCards();
+        // 캐러셀을 보는 동안 데이터가 도착했다면 시트 슬라이드로 다시 만듭니다.
+        if (!carouselScreen.classList.contains('hidden') &&
+            res.slides && res.slides.length) {
+          buildCarousel();
+        }
       });
     }
 
@@ -268,47 +425,40 @@
         b.addEventListener('click', () => render(b.dataset.season)));
     }
 
-    // 1모둠~10모둠 카드는 항상 미리 만들어 둡니다.
-    // 시트에 해당 모둠의 링크가 아직 없으면 "준비 중"으로 보입니다.
-    const FIXED_TEAMS = Array.from({ length: 10 }, (_, i) => (i + 1) + '모둠');
-
+    // 시트의 i번째 줄이 i번 자리 카드입니다 (줄 순서 = 모둠 자리).
+    // 모둠 이름 칸을 바꾸면 갤러리에도 그대로 반영되고,
+    // 이름 칸이 비어 있으면 "n모둠"으로 표시합니다.
+    // 링크가 아직 없는 자리는 "준비 중"으로 보입니다.
     function renderCards() {
       const g = document.getElementById('gallery');
       const works = data.works || [];
-      const byTeam = {};
-      works.forEach(w => { if (w.team && !byTeam[w.team]) byTeam[w.team] = w; });
-      const seen = {};
-      const extraTeams = [];
-      works.forEach(w => {
-        if (w.team && FIXED_TEAMS.indexOf(w.team) < 0 && !seen[w.team]) {
-          seen[w.team] = true;
-          extraTeams.push(w.team);
-        }
-      });
-      const orderedTeams = FIXED_TEAMS.concat(extraTeams);
-
-      g.innerHTML = orderedTeams.map(team => {
-        const w = byTeam[team];
+      const n = Math.max(10, works.length);
+      const html = [];
+      for (let i = 0; i < n; i++) {
+        const w = works[i];
+        const team = (w && w.team) ? w.team : (i + 1) + '모둠';
         if (!w || !w.link) {
-          return '<article class="card pending">' +
+          html.push('<article class="card pending">' +
             '<div class="body">' +
               '<div class="team">' + esc(team) + '</div>' +
               '<div class="title">준비 중</div>' +
               '<div class="desc">작품 링크가 등록되면 여기에 보입니다.</div>' +
             '</div>' +
-          '</article>';
+          '</article>');
+          continue;
         }
-        return '<article class="card">' +
+        html.push('<article class="card">' +
           (w.thumb ? '<img src="' + esc(w.thumb) + '" alt="">' : '') +
           '<div class="body">' +
-            '<div class="team">' + esc(w.team) + '</div>' +
+            '<div class="team">' + esc(team) + '</div>' +
             '<div class="title">' + esc(w.title || '작품') + '</div>' +
             '<div class="desc">' + esc(w.desc) + '</div>' +
             '<a class="view" href="' + esc(w.link) +
               '" target="_blank" rel="noopener">작품 보러가기</a>' +
           '</div>' +
-        '</article>';
-      }).join('');
+        '</article>');
+      }
+      g.innerHTML = html.join('');
     }
 
     render();
