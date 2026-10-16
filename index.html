@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>해커톤 작품 갤러리</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Pretendard', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+      background: #f5f6f8; color: #222; line-height: 1.6;
+    }
+    header {
+      background: linear-gradient(135deg, #4f46e5, #7c3aed);
+      color: #fff; padding: 32px 20px 28px; text-align: center;
+    }
+    header h1 { font-size: 1.5rem; margin-bottom: 8px; }
+    header p { font-size: .95rem; opacity: .92; white-space: pre-line; }
+    .season-bar {
+      display: flex; gap: 8px; flex-wrap: wrap;
+      justify-content: center; padding: 14px 16px 0;
+    }
+    .season-bar button {
+      border: 1px solid #d0d3dd; background: #fff;
+      border-radius: 999px; padding: 6px 14px;
+      font-size: .85rem; cursor: pointer;
+    }
+    .season-bar button.on { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+    main {
+      max-width: 720px; margin: 0 auto; padding: 16px;
+      display: grid; gap: 14px;
+    }
+    @media (min-width: 560px) { main { grid-template-columns: 1fr 1fr; } }
+    .card {
+      background: #fff; border-radius: 14px; overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      display: flex; flex-direction: column;
+    }
+    .card img { width: 100%; aspect-ratio: 16/9; object-fit: cover; background: #e9ebf0; }
+    .card .body { padding: 14px 16px 16px; flex: 1; display: flex; flex-direction: column; gap: 6px; }
+    .team { font-size: .8rem; font-weight: 700; color: #4f46e5; }
+    .title { font-size: 1.05rem; font-weight: 700; }
+    .desc { font-size: .9rem; color: #555; flex: 1; white-space: pre-line; }
+    .view {
+      display: inline-block; margin-top: 8px; text-align: center;
+      background: #111827; color: #fff !important; text-decoration: none;
+      border-radius: 8px; padding: 10px 12px; font-size: .9rem; font-weight: 600;
+    }
+    .empty { text-align: center; color: #888; padding: 40px 0; grid-column: 1 / -1; }
+    footer { text-align: center; color: #9aa0ab; font-size: .78rem; padding: 24px 0 32px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>해커톤 작품 갤러리</h1>
+    <p id="intro">불러오는 중...</p>
+  </header>
+  <div class="season-bar" id="seasonBar"></div>
+  <main id="gallery"></main>
+  <footer>작품에 학생 실명·얼굴 등 개인정보는 게시하지 않습니다.</footer>
+
+  <script>
+    // ============================================
+    // 설정: Apps Script 웹앱 배포 주소(/exec)를 붙여넣으세요.
+    // 예) 'https://script.google.com/macros/s/AKfy.../exec'
+    // ============================================
+    const API_URL = '여기에_앱스스크립트_exec_주소_붙여넣기';
+
+    let data = null;
+    let cbSeq = 0;
+
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;',
+        '"': '&quot;', "'": '&#39;'
+      }[c]));
+    }
+
+    // Apps Script 웹앱을 JSONP로 호출합니다 (도메인이 달라도 동작).
+    function fetchGallery(season, onDone) {
+      const cbName = '__galleryCb' + (++cbSeq);
+      const s = document.createElement('script');
+      let settled = false;
+      function cleanup() {
+        try { delete window[cbName]; } catch (e) { window[cbName] = undefined; }
+        if (s.parentNode) s.parentNode.removeChild(s);
+      }
+      window[cbName] = function (res) {
+        settled = true;
+        cleanup();
+        onDone(null, res);
+      };
+      s.onerror = function () {
+        if (settled) return;
+        cleanup();
+        onDone(new Error('load failed'));
+      };
+      s.src = API_URL + '?callback=' + cbName +
+        (season ? '&season=' + encodeURIComponent(season) : '');
+      document.body.appendChild(s);
+    }
+
+    function showError(msg) {
+      document.getElementById('intro').textContent = msg;
+      document.getElementById('gallery').innerHTML =
+        '<p class="empty">' + esc(msg) + '</p>';
+    }
+
+    function render(season) {
+      if (!API_URL || API_URL.indexOf('http') !== 0) {
+        showError('아직 설정 전입니다. index.html의 API_URL에 Apps Script 주소를 넣어주세요.');
+        return;
+      }
+      fetchGallery(season, function (err, res) {
+        if (err || !res) {
+          showError('작품을 불러오지 못했습니다. 잠시 후 다시 열어주세요.');
+          return;
+        }
+        data = res;
+        document.getElementById('intro').textContent =
+          res.intro || '학생들이 직접 기획하고 만든 작품을 소개합니다.';
+        renderSeasonBar();
+        renderCards();
+      });
+    }
+
+    function renderSeasonBar() {
+      const bar = document.getElementById('seasonBar');
+      if (!data.seasons || data.seasons.length <= 1) { bar.innerHTML = ''; return; }
+      bar.innerHTML = data.seasons.map(s =>
+        '<button data-season="' + esc(s) + '" class="' +
+        (s === data.current ? 'on' : '') + '">' + esc(s) + '</button>'
+      ).join('');
+      bar.querySelectorAll('button').forEach(b =>
+        b.addEventListener('click', () => render(b.dataset.season)));
+    }
+
+    function renderCards() {
+      const g = document.getElementById('gallery');
+      if (!data.works.length) {
+        g.innerHTML = '<p class="empty">아직 등록된 작품이 없습니다.</p>';
+        return;
+      }
+      g.innerHTML = data.works.map(w =>
+        '<article class="card">' +
+          (w.thumb ? '<img src="' + esc(w.thumb) + '" alt="">' : '') +
+          '<div class="body">' +
+            '<div class="team">' + esc(w.team) + '</div>' +
+            '<div class="title">' + esc(w.title) + '</div>' +
+            '<div class="desc">' + esc(w.desc) + '</div>' +
+            (w.link
+              ? '<a class="view" href="' + esc(w.link) +
+                '" target="_blank" rel="noopener">작품 보러가기</a>'
+              : '') +
+          '</div>' +
+        '</article>'
+      ).join('');
+    }
+
+    render();
+  </script>
+</body>
+</html>
