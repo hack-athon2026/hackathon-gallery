@@ -12,7 +12,7 @@
     }
     button { font-family: inherit; }
 
-    /* ===== 인트로 (매트릭스 모션) ===== */
+    /* ===== 첫 화면: 인트로 (해커톤 안내 글자 비) ===== */
     #intro-screen {
       position: fixed; inset: 0; z-index: 50;
       background: #000; color: #0f0;
@@ -50,24 +50,51 @@
       cursor: pointer; box-shadow: 0 0 18px rgba(33,217,33,.65);
     }
     .big-btn:active { transform: scale(.96); }
-    .skip-link {
-      display: block; margin: 18px auto 0; background: none; border: none;
-      color: #6c6; font-size: .85rem; text-decoration: underline;
-      cursor: pointer;
-    }
     #intro-screen.hidden, #carousel-screen.hidden { display: none; }
 
-    /* ===== 설명 캐러셀 ===== */
+    /* ===== 우측 상단 통통 튀는 "해커톤이란?" 말풍선 ===== */
+    #helpBubble {
+      position: fixed; top: 14px; right: 14px; z-index: 60;
+      padding: 11px 18px; border: none; border-radius: 999px;
+      background: #21d921; color: #001600;
+      font-size: .92rem; font-weight: 800; letter-spacing: .02em;
+      box-shadow: 0 4px 14px rgba(33,217,33,.55), 0 0 0 3px rgba(255,255,255,.85);
+      cursor: pointer;
+      animation: bubble-bounce 1.7s ease-in-out infinite;
+    }
+    @keyframes bubble-bounce {
+      0%, 100% { transform: translateY(0) scale(1); }
+      22%      { transform: translateY(-10px) scale(1.04); }
+      40%      { transform: translateY(0) scale(1); }
+      55%      { transform: translateY(-5px) scale(1.02); }
+      70%      { transform: translateY(0) scale(1); }
+    }
+    #helpBubble:active { transform: scale(.94); }
+
+    /* ===== 갤러리에서 첫 화면으로 돌아가는 버튼 ===== */
+    #homeBtn {
+      position: fixed; top: 14px; left: 14px; z-index: 60;
+      display: none;
+      padding: 11px 18px; border-radius: 999px;
+      border: 1px solid #d0d3dd; background: rgba(255,255,255,.96);
+      color: #333; font-size: .92rem; font-weight: 700;
+      box-shadow: 0 2px 10px rgba(0,0,0,.14); cursor: pointer;
+    }
+    #homeBtn.show { display: block; }
+    #homeBtn:active { transform: scale(.96); }
+
+    /* ===== 설명 캐러셀 (팝업) ===== */
     #carousel-screen {
-      position: fixed; inset: 0; z-index: 40;
+      position: fixed; inset: 0; z-index: 70;
       background: linear-gradient(160deg, #050810, #0d1b2a 60%, #111827);
       color: #eef2f8;
       display: flex; flex-direction: column;
     }
-    .car-skip {
-      align-self: flex-end; margin: 14px 16px 0;
-      background: none; border: none; color: #7f8ba0;
-      font-size: .85rem; text-decoration: underline; cursor: pointer;
+    .car-close {
+      position: absolute; top: 12px; right: 12px; z-index: 2;
+      width: 42px; height: 42px; border-radius: 50%;
+      border: 1px solid #3a465c; background: #1b2537; color: #cdd6e4;
+      font-size: 1.15rem; line-height: 1; cursor: pointer;
     }
     .slides-wrap {
       flex: 1; overflow: hidden; position: relative;
@@ -157,25 +184,31 @@
     @media (prefers-reduced-motion: reduce) {
       .intro-title { animation: none; }
       .slides-track { transition: none; }
+      #helpBubble { animation: none; }
     }
   </style>
 </head>
 <body>
-  <!-- 1단계: 인트로 (매트릭스 모션) -->
-  <div id="intro-screen" role="dialog" aria-label="해커톤 갤러리 입장 화면">
+  <!-- 첫 화면: 해커톤 안내 인트로 (글자가 비처럼 떨어짐) -->
+  <div id="intro-screen" role="dialog" aria-label="해커톤 안내 첫 화면">
     <canvas id="rain" aria-hidden="true"></canvas>
     <div class="intro-content">
-      <div class="intro-title" id="eventTitle">1st SCH Hackathon</div>
-      <div class="intro-sub" id="eventDate">2026.10.24 토요일</div>
-      <div class="intro-sub intro-sub2" id="eventPlaceTime">컴퓨터실 · 09:00-17:00</div>
-      <button class="big-btn" id="introNext">다음</button>
-      <button class="skip-link" id="skipBtn">갤러리 바로가기</button>
+      <div class="intro-title">1st SCH Hackathon</div>
+      <div class="intro-sub">2026.10.24 토요일</div>
+      <div class="intro-sub intro-sub2">컴퓨터실 · 09:00-17:00</div>
+      <button class="big-btn" id="enterBtn">갤러리 입장하기</button>
     </div>
   </div>
 
-  <!-- 2단계: 해커톤 설명 캐러셀 -->
+  <!-- 우측 상단: 통통 튀는 설명서 말풍선 (어디서나 누를 수 있음) -->
+  <button id="helpBubble" aria-label="해커톤이란? 설명 보기">해커톤이란?</button>
+
+  <!-- 갤러리 → 첫 화면으로 돌아가는 버튼 -->
+  <button id="homeBtn" aria-label="처음 화면으로 돌아가기">← 처음으로</button>
+
+  <!-- 해커톤 설명 캐러셀 (팝업) -->
   <div id="carousel-screen" class="hidden" role="dialog" aria-label="해커톤 소개">
-    <button class="car-skip" id="skipBtn2">건너뛰고 갤러리로</button>
+    <button class="car-close" id="carClose" aria-label="닫기">✕</button>
     <div class="slides-wrap" id="slidesWrap">
       <div class="slides-track" id="slidesTrack"></div>
     </div>
@@ -188,7 +221,7 @@
     </div>
   </div>
 
-  <!-- 3단계: 갤러리 -->
+  <!-- 갤러리 -->
   <header>
     <h1>해커톤 작품 갤러리</h1>
     <p id="intro">불러오는 중...</p>
@@ -201,10 +234,19 @@
     // ============================================
     // 설정: Apps Script 웹앱 배포 주소(/exec)를 붙여넣으세요.
     // 예) 'https://script.google.com/macros/s/AKfy.../exec'
+    // 갤러리 작품 목록만 시트에서 읽습니다.
+    // 첫 화면(인트로)은 시트와 상관없이 항상 바로 뜹니다.
     // ============================================
     const API_URL = 'https://script.google.com/macros/s/AKfycbwyEWi_dVdG9rmWCZq3urU3vmrW32if-pVa16WncZUPCGMm0t8TXo2JUZtRjTGfeqLlnA/exec';
 
-    // 시트 '소개' 탭: A1=소개 문구, A2=대회 이름, A3=날짜 (비어 있으면 아래 기본값 사용)
+    // 첫 화면에 비처럼 떨어지는 글자들: 해커톤 안내 문구
+    // (다음 회차에는 여기 단어와 위쪽 제목·날짜·장소만 바꾸면 됩니다)
+    const RAIN_WORDS = [
+      '해커톤', 'HACKATHON', '2026.10.24', '토요일', '컴퓨터실',
+      '09:00-17:00', '만들기', '코딩', '상상', '도전', '아이디어', '팀워크'
+    ];
+    const RAIN_GLYPHS = 'アイウエオカキクケコサシスセソタチツテト0123456789';
+
     // 시트 '설명' 탭: 제목|내용을 한 줄에 한 장씩 적으면 기본 슬라이드 대신 그 내용이 나옵니다.
     const DEFAULT_SLIDES = [
       { emoji: '💡', title: '해커톤이 뭐예요?',
@@ -230,78 +272,111 @@
     /* ---------- 화면 전환 ---------- */
     const introScreen = document.getElementById('intro-screen');
     const carouselScreen = document.getElementById('carousel-screen');
+    const homeBtn = document.getElementById('homeBtn');
+
+    function introVisible() { return !introScreen.classList.contains('hidden'); }
+    function carouselVisible() { return !carouselScreen.classList.contains('hidden'); }
 
     function goGallery() {
       stopRain();
       introScreen.classList.add('hidden');
       carouselScreen.classList.add('hidden');
-      sessionStorage.setItem('hk_entered', '1');
+      homeBtn.classList.add('show');
+      window.scrollTo(0, 0);
     }
-    function goCarousel() {
+    function goHome() {
+      carouselScreen.classList.add('hidden');
+      homeBtn.classList.remove('show');
+      introScreen.classList.remove('hidden');
+      startRain();
+      window.scrollTo(0, 0);
+    }
+    function openCarousel() {
       stopRain();
-      introScreen.classList.add('hidden');
-      carouselScreen.classList.remove('hidden');
       buildCarousel();
+      carouselScreen.classList.remove('hidden');
+    }
+    function closeCarousel() {
+      carouselScreen.classList.add('hidden');
+      if (introVisible()) startRain();
     }
 
-    /* ---------- 1단계: 인트로 디지털 레인 ---------- */
+    document.getElementById('enterBtn').addEventListener('click', goGallery);
+    document.getElementById('helpBubble').addEventListener('click', openCarousel);
+    homeBtn.addEventListener('click', goHome);
+    document.getElementById('carClose').addEventListener('click', closeCarousel);
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && carouselVisible()) closeCarousel();
+    });
+
+    /* ---------- 첫 화면: 안내 글자 비 ---------- */
     let rafId = null;
+    const canvas = document.getElementById('rain');
+    const ctx = canvas.getContext('2d');
+    let columns = [], fontSize = 16, lastDraw = 0;
+
+    function newColumn() {
+      return {
+        y: Math.floor(Math.random() * -30),
+        // 35%는 안내 단어가 세로로 반복해서 흐르고, 나머지는 무작위 글자
+        word: Math.random() < 0.35
+          ? RAIN_WORDS[Math.floor(Math.random() * RAIN_WORDS.length)]
+          : null
+      };
+    }
+    function resizeRain() {
+      canvas.width = introScreen.clientWidth || window.innerWidth;
+      canvas.height = introScreen.clientHeight || window.innerHeight;
+      fontSize = Math.max(14, Math.floor(canvas.width / 28));
+      const count = Math.ceil(canvas.width / fontSize);
+      columns = Array.from({ length: count }, newColumn);
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    function drawRain(ts) {
+      rafId = requestAnimationFrame(drawRain);
+      if (ts - lastDraw < 66) return;   // 약 15fps: 배터리 부담 ↓
+      lastDraw = ts;
+      ctx.fillStyle = 'rgba(0,0,0,0.12)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.font = fontSize + 'px monospace';
+      for (let i = 0; i < columns.length; i++) {
+        const col = columns[i];
+        let ch;
+        if (col.word) {
+          const L = col.word.length;
+          ch = col.word[((col.y % L) + L) % L];
+        } else {
+          ch = RAIN_GLYPHS[Math.floor(Math.random() * RAIN_GLYPHS.length)];
+        }
+        ctx.fillStyle = Math.random() < 0.06 ? '#b6ffb6' : '#0b3';
+        ctx.fillText(ch, i * fontSize, col.y * fontSize);
+        if (col.y * fontSize > canvas.height && Math.random() > 0.985) {
+          columns[i] = newColumn();
+          columns[i].y = 0;
+        }
+        col.y++;
+      }
+    }
+    function startRain() {
+      if (reduceMotion || rafId || !introVisible()) return;
+      resizeRain();
+      rafId = requestAnimationFrame(drawRain);
+    }
     function stopRain() {
       if (rafId) cancelAnimationFrame(rafId);
       rafId = null;
     }
-    (function initIntro() {
-      if (reduceMotion || sessionStorage.getItem('hk_entered') === '1') {
-        introScreen.classList.add('hidden');
-        return;
-      }
-      const canvas = document.getElementById('rain');
-      const ctx = canvas.getContext('2d');
-      const CHARS = 'アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789';
-      let columns = [], fontSize = 16, lastDraw = 0;
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) { stopRain(); }
+      else if (introVisible() && !carouselVisible()) startRain();
+    });
+    window.addEventListener('resize', () => {
+      if (rafId) resizeRain();
+    });
+    startRain();
 
-      function resize() {
-        canvas.width = introScreen.clientWidth;
-        canvas.height = introScreen.clientHeight;
-        fontSize = Math.max(14, Math.floor(canvas.width / 28));
-        const count = Math.ceil(canvas.width / fontSize);
-        columns = Array.from({ length: count },
-          () => Math.floor(Math.random() * -30));
-        ctx.fillStyle = '#000';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-      }
-      function draw(ts) {
-        rafId = requestAnimationFrame(draw);
-        if (ts - lastDraw < 66) return;   // 약 15fps: 배터리 부담 ↓
-        lastDraw = ts;
-        ctx.fillStyle = 'rgba(0,0,0,0.12)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.font = fontSize + 'px monospace';
-        for (let i = 0; i < columns.length; i++) {
-          const ch = CHARS[Math.floor(Math.random() * CHARS.length)];
-          const y = columns[i] * fontSize;
-          ctx.fillStyle = Math.random() < 0.06 ? '#b6ffb6' : '#0b3';
-          ctx.fillText(ch, i * fontSize, y);
-          if (y > canvas.height && Math.random() > 0.985) columns[i] = 0;
-          columns[i]++;
-        }
-      }
-      document.addEventListener('visibilitychange', () => {
-        if (document.hidden) { stopRain(); }
-        else if (!introScreen.classList.contains('hidden') && !rafId) {
-          rafId = requestAnimationFrame(draw);
-        }
-      });
-      window.addEventListener('resize', resize);
-      resize();
-      rafId = requestAnimationFrame(draw);
-    })();
-
-    document.getElementById('introNext').addEventListener('click', goCarousel);
-    document.getElementById('skipBtn').addEventListener('click', goGallery);
-    document.getElementById('skipBtn2').addEventListener('click', goGallery);
-
-    /* ---------- 2단계: 설명 캐러셀 ---------- */
+    /* ---------- 설명 캐러셀 ---------- */
     let slideIndex = 0;
     let slideCount = 0;
 
@@ -336,7 +411,9 @@
         d.classList.toggle('on', j === slideIndex));
       document.getElementById('prevBtn').disabled = (slideIndex === 0);
       const last = (slideIndex === slideCount - 1);
-      document.getElementById('nextBtn').textContent = last ? '갤러리 입장하기' : '다음';
+      // 갤러리에서 연 경우엔 "돌아가기", 첫 화면에서 연 경우엔 "갤러리 입장하기"
+      document.getElementById('nextBtn').textContent = !last ? '다음'
+        : (introVisible() ? '갤러리 입장하기' : '돌아가기');
     }
 
     document.getElementById('prevBtn').addEventListener('click', () => showSlide(slideIndex - 1));
@@ -363,7 +440,7 @@
       }, { passive: true });
     })();
 
-    /* ---------- 3단계: 갤러리 ---------- */
+    /* ---------- 갤러리 ---------- */
     // Apps Script 웹앱을 JSONP로 호출합니다 (도메인이 달라도 동작).
     function fetchGallery(season, onDone) {
       const cbName = '__galleryCb' + (++cbSeq);
@@ -405,19 +482,12 @@
           return;
         }
         data = res;
-        if (res.eventTitle) document.getElementById('eventTitle').textContent = res.eventTitle;
-        if (res.eventDate) document.getElementById('eventDate').textContent = res.eventDate;
-        if (res.eventPlace || res.eventTime) {
-          document.getElementById('eventPlaceTime').textContent =
-            [res.eventPlace, res.eventTime].filter(Boolean).join(' · ');
-        }
         document.getElementById('intro').textContent =
           res.intro || '학생들이 직접 기획하고 만든 작품을 소개합니다.';
         renderSeasonBar();
         renderCards();
         // 캐러셀을 보는 동안 데이터가 도착했다면 시트 슬라이드로 다시 만듭니다.
-        if (!carouselScreen.classList.contains('hidden') &&
-            res.slides && res.slides.length) {
+        if (carouselVisible() && res.slides && res.slides.length) {
           buildCarousel();
         }
       });
