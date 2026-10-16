@@ -59,13 +59,15 @@ function getGallery(season) {
     ? season
     : seasons[seasons.length - 1];  // 기본 = 마지막 탭(최신 회차)
 
-  // 소개 탭: A1=소개 문구, A2=대회 이름(예: 1st SCH Hackathon), A3=날짜(예: 2026.10.24 토요일)
-  let intro = '', eventTitle = '', eventDate = '';
+  // 소개 탭: A1=소개 문구, A2=대회 이름(예: 1st SCH Hackathon), A3=날짜(예: 2026.10.24 토요일), A4=장소(예: 컴퓨터실), A5=시간(예: 09:00-17:00)
+  let intro = '', eventTitle = '', eventDate = '', eventPlace = '', eventTime = '';
   const introSheet = ss.getSheetByName('소개');
   if (introSheet) {
     intro = String(introSheet.getRange('A1').getValue() || '');
     eventTitle = String(introSheet.getRange('A2').getValue() || '');
     eventDate = String(introSheet.getRange('A3').getValue() || '');
+    eventPlace = String(introSheet.getRange('A4').getValue() || '');
+    eventTime = String(introSheet.getRange('A5').getValue() || '');
   }
 
   const slides = getSlides(ss);
@@ -84,5 +86,5 @@ function getGallery(season) {
       works.push({ slot: works.length + 1, team, title, desc, link, thumb });
     }
   }
-  return { intro, eventTitle, eventDate, slides, seasons, current, works };
+  return { intro, eventTitle, eventDate, eventPlace, eventTime, slides, seasons, current, works };
 }
