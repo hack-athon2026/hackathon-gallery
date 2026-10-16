@@ -83,21 +83,25 @@
     #homeBtn.show { display: block; }
     #homeBtn:active { transform: scale(.96); }
 
-    /* ===== 설명 캐러셀 (팝업) ===== */
+    /* ===== 설명 캐러셀 (팝업) : 배경은 매트릭스 글자 비 ===== */
     #carousel-screen {
       position: fixed; inset: 0; z-index: 70;
-      background: linear-gradient(160deg, #050810, #0d1b2a 60%, #111827);
+      background: linear-gradient(160deg, #020604, #04180c 60%, #06210f);
       color: #eef2f8;
       display: flex; flex-direction: column;
     }
+    #carRain {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      z-index: 0; opacity: .5;
+    }
     .car-close {
-      position: absolute; top: 12px; right: 12px; z-index: 2;
+      position: absolute; top: 12px; right: 12px; z-index: 3;
       width: 42px; height: 42px; border-radius: 50%;
-      border: 1px solid #3a465c; background: #1b2537; color: #cdd6e4;
+      border: 1px solid #1f5138; background: #0a2417; color: #b9f5cf;
       font-size: 1.15rem; line-height: 1; cursor: pointer;
     }
     .slides-wrap {
-      flex: 1; overflow: hidden; position: relative;
+      flex: 1; overflow: hidden; position: relative; z-index: 1;
       touch-action: pan-y;
     }
     .slides-track {
@@ -113,24 +117,25 @@
     .slide-emoji { font-size: 3rem; margin-bottom: 18px; }
     .slide h2 {
       font-size: clamp(1.4rem, 6vw, 2rem); margin-bottom: 16px;
-      color: #7dd3fc;
+      color: #86f7b0;
+      text-shadow: 0 0 14px rgba(94,234,144,.35);
     }
     .slide p {
       max-width: 560px; font-size: clamp(.98rem, 4.2vw, 1.12rem);
-      color: #cdd6e4; white-space: pre-line;
+      color: #d5e9dc; white-space: pre-line;
     }
-    .car-ui { padding: 12px 20px 26px; text-align: center; }
+    .car-ui { position: relative; z-index: 1; padding: 12px 20px 26px; text-align: center; }
     .dots { display: flex; gap: 8px; justify-content: center; margin-bottom: 14px; }
     .dots span {
       width: 8px; height: 8px; border-radius: 50%;
-      background: #3a465c; transition: background .2s;
+      background: #1f5138; transition: background .2s;
     }
-    .dots span.on { background: #7dd3fc; }
+    .dots span.on { background: #5eea90; }
     .car-nav { display: flex; gap: 10px; justify-content: center; }
     .car-nav button {
       padding: 13px 26px; border-radius: 999px; font-size: 1rem;
-      font-weight: 700; cursor: pointer; border: 1px solid #3a465c;
-      background: #1b2537; color: #cdd6e4;
+      font-weight: 700; cursor: pointer; border: 1px solid #1f5138;
+      background: #0a2417; color: #b9f5cf;
     }
     .car-nav button.primary {
       background: #21d921; border-color: #21d921; color: #001600;
@@ -139,28 +144,56 @@
     .car-nav button:disabled { opacity: .35; cursor: default; }
 
     /* ===== 캐러셀 슬라이드 글자 모션 ===== */
-    /* 1번째 슬라이드: 위에서 통통 떨어짐 */
-    .anim-fall.play .slide-emoji { animation: fallIn .6s cubic-bezier(.22,1.4,.36,1) both; }
-    .anim-fall.play h2           { animation: fallIn .6s .12s cubic-bezier(.22,1.4,.36,1) both; }
-    .anim-fall.play p            { animation: fallIn .6s .24s cubic-bezier(.22,1.4,.36,1) both; }
-    @keyframes fallIn {
-      from { opacity: 0; transform: translateY(-56px); }
-      to   { opacity: 1; transform: translateY(0); }
+    /* JS가 글자를 하나씩 span.ch로 쪼개고 --d 만큼 늦게 재생합니다 */
+    .ch { display: inline-block; white-space: pre; }
+
+    /* 1번째 슬라이드: 글자가 위에서 통통 튀며 차례로 낙하 */
+    .anim-fall.play .slide-emoji { animation: emDrop .7s cubic-bezier(.22,1.6,.36,1) both; }
+    @keyframes emDrop {
+      0%   { opacity: 0; transform: translateY(-90px) scale(1.8) rotate(-20deg); }
+      55%  { opacity: 1; transform: translateY(10px) scale(.92) rotate(6deg); }
+      78%  { transform: translateY(-4px) scale(1.05) rotate(-2deg); }
+      100% { opacity: 1; transform: translateY(0) scale(1) rotate(0); }
     }
-    /* 2번째 슬라이드: 갑자기 팝! 하고 나타남 */
-    .anim-pop.play .slide-emoji { animation: popIn .28s cubic-bezier(.34,1.56,.64,1) both; }
-    .anim-pop.play h2           { animation: popIn .28s .07s cubic-bezier(.34,1.56,.64,1) both; }
-    .anim-pop.play p            { animation: popIn .28s .14s cubic-bezier(.34,1.56,.64,1) both; }
+    .anim-fall.play .ch {
+      animation: charFall .62s cubic-bezier(.25,1.5,.4,1) both;
+      animation-delay: var(--d, 0s);
+    }
+    @keyframes charFall {
+      0%   { opacity: 0; transform: translateY(-1.7em) rotate(-18deg) scale(1.7); text-shadow: 0 0 22px rgba(134,247,176,.95); }
+      55%  { opacity: 1; transform: translateY(.14em) rotate(6deg) scale(.93); }
+      78%  { transform: translateY(-.05em) rotate(-2deg) scale(1.04); text-shadow: 0 0 8px rgba(134,247,176,.45); }
+      100% { opacity: 1; transform: translateY(0) rotate(0) scale(1); text-shadow: 0 0 0 rgba(134,247,176,0); }
+    }
+
+    /* 2번째 슬라이드: 글자가 팡팡 튀듯 차례로 팝 */
+    .anim-pop.play .slide-emoji { animation: emPop .5s cubic-bezier(.3,1.8,.5,1) both; }
+    @keyframes emPop {
+      0%   { opacity: 0; transform: scale(0) rotate(-30deg); }
+      60%  { opacity: 1; transform: scale(1.35) rotate(8deg); }
+      100% { opacity: 1; transform: scale(1) rotate(0); }
+    }
+    .anim-pop.play .ch {
+      animation: charPop .5s cubic-bezier(.3,1.9,.45,1) both;
+      animation-delay: var(--d, 0s);
+    }
+    @keyframes charPop {
+      0%   { opacity: 0; transform: scale(0) rotate(14deg); text-shadow: 0 0 24px rgba(134,247,176,.95); }
+      55%  { opacity: 1; transform: scale(1.4) rotate(-5deg); }
+      78%  { transform: scale(.9) rotate(2deg); text-shadow: 0 0 8px rgba(134,247,176,.5); }
+      100% { opacity: 1; transform: scale(1) rotate(0); text-shadow: 0 0 0 rgba(134,247,176,0); }
+    }
+
+    /* 3번째 슬라이드: 타자기 (글자 입력은 JS, 여기선 깜빡이는 커서만) */
+    .anim-type.play .slide-emoji { animation: popIn .3s cubic-bezier(.34,1.56,.64,1) both; }
     @keyframes popIn {
       from { opacity: 0; transform: scale(.5); }
       to   { opacity: 1; transform: scale(1); }
     }
-    /* 3번째 슬라이드: 타자기 (글자 입력은 JS, 여기선 깜빡이는 커서만) */
-    .anim-type.play .slide-emoji { animation: popIn .3s cubic-bezier(.34,1.56,.64,1) both; }
     .anim-type .typing::after {
       content: ''; display: inline-block;
       width: 2px; height: 1em; margin-left: 3px;
-      background: #7dd3fc; vertical-align: -0.12em;
+      background: #5eea90; vertical-align: -0.12em;
       animation: caretBlink .7s steps(1) infinite;
     }
     @keyframes caretBlink { 50% { opacity: 0; } }
@@ -168,13 +201,13 @@
     /* ===== 갤러리 ===== */
     header {
       background: linear-gradient(135deg, #4f46e5, #7c3aed);
-      color: #fff; padding: 68px 20px 28px; text-align: center;
+      color: #fff; padding: 52px 20px 24px; text-align: center;
     }
     header h1 { font-size: 1.5rem; margin-bottom: 8px; }
     header p { font-size: .95rem; opacity: .92; white-space: pre-line; }
     .season-bar {
       display: flex; gap: 8px; flex-wrap: wrap;
-      justify-content: center; padding: 14px 16px 0;
+      justify-content: center; padding: 12px 16px 0;
     }
     .season-bar button {
       border: 1px solid #d0d3dd; background: #fff;
@@ -212,7 +245,7 @@
       .intro-title { animation: none; }
       .slides-track { transition: none; }
       #helpBubble { animation: none; }
-      .slide.play .slide-emoji, .slide.play h2, .slide.play p { animation: none; }
+      .slide.play .slide-emoji, .slide.play h2, .slide.play p, .slide.play .ch { animation: none; }
     }
   </style>
 </head>
@@ -234,8 +267,9 @@
   <!-- 갤러리 → 첫 화면으로 돌아가는 버튼 -->
   <button id="homeBtn" aria-label="처음 화면으로 돌아가기">← 처음으로</button>
 
-  <!-- 해커톤 설명 캐러셀 (팝업) -->
+  <!-- 해커톤 설명 캐러셀 (팝업) : 배경에 매트릭스 글자 비 -->
   <div id="carousel-screen" class="hidden" role="dialog" aria-label="해커톤 소개">
+    <canvas id="carRain" aria-hidden="true"></canvas>
     <button class="car-close" id="carClose" aria-label="닫기">✕</button>
     <div class="slides-wrap" id="slidesWrap">
       <div class="slides-track" id="slidesTrack"></div>
@@ -307,6 +341,7 @@
 
     function goGallery() {
       stopRain();
+      stopCarRain();
       stopTypewriter();
       introScreen.classList.add('hidden');
       carouselScreen.classList.add('hidden');
@@ -314,6 +349,7 @@
       window.scrollTo(0, 0);
     }
     function goHome() {
+      stopCarRain();
       carouselScreen.classList.add('hidden');
       homeBtn.classList.remove('show');
       introScreen.classList.remove('hidden');
@@ -324,9 +360,11 @@
       stopRain();
       buildCarousel();
       carouselScreen.classList.remove('hidden');
+      startCarRain();
     }
     function closeCarousel() {
       stopTypewriter();
+      stopCarRain();
       carouselScreen.classList.add('hidden');
       if (introVisible()) startRain();
     }
@@ -397,12 +435,56 @@
       if (rafId) cancelAnimationFrame(rafId);
       rafId = null;
     }
+
+    /* ---------- 캐러셀 배경: 매트릭스 글자 비 ---------- */
+    const carCanvas = document.getElementById('carRain');
+    const carCtx = carCanvas.getContext('2d');
+    let carRaf = null, carCols = [], carFont = 15, carLast = 0;
+
+    function resizeCarRain() {
+      carCanvas.width = carouselScreen.clientWidth || window.innerWidth;
+      carCanvas.height = carouselScreen.clientHeight || window.innerHeight;
+      carFont = Math.max(13, Math.floor(carCanvas.width / 22));
+      const count = Math.ceil(carCanvas.width / carFont);
+      carCols = Array.from({ length: count }, () => Math.floor(Math.random() * -40));
+      carCtx.fillStyle = '#020604';
+      carCtx.fillRect(0, 0, carCanvas.width, carCanvas.height);
+    }
+    function drawCarRain(ts) {
+      carRaf = requestAnimationFrame(drawCarRain);
+      if (ts - carLast < 55) return;   // 약 18fps
+      carLast = ts;
+      carCtx.fillStyle = 'rgba(2,6,4,0.14)';
+      carCtx.fillRect(0, 0, carCanvas.width, carCanvas.height);
+      carCtx.font = carFont + 'px monospace';
+      for (let i = 0; i < carCols.length; i++) {
+        const ch = RAIN_GLYPHS[Math.floor(Math.random() * RAIN_GLYPHS.length)];
+        carCtx.fillStyle = Math.random() < 0.08 ? '#c8ffd8' : '#0c4';
+        carCtx.fillText(ch, i * carFont, carCols[i] * carFont);
+        if (carCols[i] * carFont > carCanvas.height && Math.random() > 0.982) {
+          carCols[i] = Math.floor(Math.random() * -20);
+        }
+        carCols[i]++;
+      }
+    }
+    function startCarRain() {
+      if (reduceMotion || carRaf || !carouselVisible()) return;
+      resizeCarRain();
+      carRaf = requestAnimationFrame(drawCarRain);
+    }
+    function stopCarRain() {
+      if (carRaf) cancelAnimationFrame(carRaf);
+      carRaf = null;
+    }
+
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) { stopRain(); }
-      else if (introVisible() && !carouselVisible()) startRain();
+      if (document.hidden) { stopRain(); stopCarRain(); }
+      else if (carouselVisible()) startCarRain();
+      else if (introVisible()) startRain();
     });
     window.addEventListener('resize', () => {
       if (rafId) resizeRain();
+      if (carRaf) resizeCarRain();
     });
     startRain();
 
@@ -448,7 +530,7 @@
     }
 
     /* ---------- 슬라이드 글자 모션 ---------- */
-    // 슬라이드마다 다른 효과: 1번째 위에서 떨어짐, 2번째 팝, 3번째 타자기 (순환)
+    // 슬라이드마다 다른 효과: 1번째 글자 낙하, 2번째 글자 팝, 3번째 타자기 (순환)
     const SLIDE_ANIMS = ['anim-fall', 'anim-pop', 'anim-type'];
     let typeTimer = null;
 
@@ -458,6 +540,24 @@
         el.classList.remove('typing'));
     }
 
+    // 글자 하나하나를 span.ch로 쪼개고, 순서대로 --d 지연을 줍니다.
+    // 줄바꿈(\n)은 그대로 두어 pre-line 줄바꿈이 유지되게 합니다.
+    function splitChars(el, baseDelay, step) {
+      const text = el.dataset.full || el.textContent;
+      el.dataset.full = text;
+      el.textContent = '';
+      let i = 0;
+      for (const ch of Array.from(text)) {
+        if (ch === '\n') { el.appendChild(document.createTextNode('\n')); continue; }
+        const s = document.createElement('span');
+        s.className = 'ch';
+        s.textContent = ch;
+        s.style.setProperty('--d', (baseDelay + i * step).toFixed(3) + 's');
+        el.appendChild(s);
+        i++;
+      }
+    }
+
     // 슬라이드가 보일 때마다 효과를 처음부터 다시 재생
     function playSlideAnim(i) {
       stopTypewriter();
@@ -465,11 +565,18 @@
       const slide = track.children[i];
       if (!slide) return;
       Array.from(track.children).forEach(s => s.classList.remove('play'));
-      // 타자기 도중에 나갔던 슬라이드는 원문부터 복구
+      // 효과 도중에 나갔던 슬라이드는 원문부터 복구
       slide.querySelectorAll('[data-full]').forEach(el => {
         el.textContent = el.dataset.full;
       });
       if (reduceMotion) { slide.classList.add('play'); return; }
+      // 1·2번째 슬라이드는 글자를 쪼개서 하나씩 튀게 재생
+      if (slide.classList.contains('anim-fall') || slide.classList.contains('anim-pop')) {
+        const h2 = slide.querySelector('h2');
+        const p = slide.querySelector('p');
+        if (h2) splitChars(h2, 0.08, 0.05);
+        if (p) splitChars(p, 0.6, 0.015);
+      }
       void slide.offsetWidth;  // 리플로우로 CSS 애니메이션 재시작
       slide.classList.add('play');
       if (slide.classList.contains('anim-type')) startTypewriter(slide);
@@ -627,4 +734,4 @@
     render();
   </script>
 </body>
-                                                  </html>
+</html>
