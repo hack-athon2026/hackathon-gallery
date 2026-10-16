@@ -10,6 +10,49 @@
       font-family: 'Pretendard', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
       background: #f5f6f8; color: #222; line-height: 1.6;
     }
+
+    /* ===== 인트로 (매트릭스 모션) ===== */
+    #intro-screen {
+      position: fixed; inset: 0; z-index: 50;
+      background: #000; color: #0f0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center; overflow: hidden;
+    }
+    #rain {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      opacity: .55;
+    }
+    .intro-content { position: relative; z-index: 2; padding: 24px; }
+    .intro-title {
+      font-size: clamp(2.2rem, 9vw, 4rem); font-weight: 800;
+      color: #d2ffd2; letter-spacing: .08em;
+      text-shadow: 0 0 12px #0f0, 0 0 40px #0a0;
+      animation: glow 2.4s ease-in-out infinite alternate;
+    }
+    .intro-sub {
+      margin-top: 10px; font-size: clamp(.95rem, 4vw, 1.15rem);
+      color: #8f8; opacity: .9; letter-spacing: .3em;
+    }
+    @keyframes glow {
+      from { text-shadow: 0 0 8px #0f0, 0 0 24px #0a0; }
+      to   { text-shadow: 0 0 18px #4f4, 0 0 60px #0c0; }
+    }
+    .enter-btn {
+      margin-top: 36px; padding: 16px 44px;
+      font-size: 1.1rem; font-weight: 700; color: #001600;
+      background: #21d921; border: none; border-radius: 999px;
+      cursor: pointer; box-shadow: 0 0 18px rgba(33,217,33,.65);
+    }
+    .enter-btn:active { transform: scale(.96); }
+    .skip-link {
+      margin-top: 18px; background: none; border: none;
+      color: #6c6; font-size: .85rem; text-decoration: underline;
+      cursor: pointer;
+    }
+    #intro-screen.hidden { display: none; }
+
+    /* ===== 갤러리 ===== */
     header {
       background: linear-gradient(135deg, #4f46e5, #7c3aed);
       color: #fff; padding: 32px 20px 28px; text-align: center;
@@ -46,11 +89,29 @@
       background: #111827; color: #fff !important; text-decoration: none;
       border-radius: 8px; padding: 10px 12px; font-size: .9rem; font-weight: 600;
     }
+    .card.pending { border: 1.5px dashed #c9cedb; box-shadow: none; }
+    .card.pending .title { color: #8a90a0; }
+    .card.pending .desc { color: #9aa0ab; }
     .empty { text-align: center; color: #888; padding: 40px 0; grid-column: 1 / -1; }
     footer { text-align: center; color: #9aa0ab; font-size: .78rem; padding: 24px 0 32px; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .intro-title { animation: none; }
+    }
   </style>
 </head>
 <body>
+  <!-- 인트로 화면: 매트릭스 스타일 디지털 레인 -->
+  <div id="intro-screen" role="dialog" aria-label="해커톤 갤러리 입장 화면">
+    <canvas id="rain" aria-hidden="true"></canvas>
+    <div class="intro-content">
+      <div class="intro-title">해커톤</div>
+      <div class="intro-sub">HACKATHON GALLERY</div>
+      <button class="enter-btn" id="enterBtn">갤러리 입장하기</button>
+      <button class="skip-link" id="skipBtn">건너뛰기</button>
+    </div>
+  </div>
+
   <header>
     <h1>해커톤 작품 갤러리</h1>
     <p id="intro">불러오는 중...</p>
@@ -66,6 +127,78 @@
     // ============================================
     const API_URL = '여기에_앱스스크립트_exec_주소_붙여넣기';
 
+    /* ---------- 인트로: 매트릭스 디지털 레인 ---------- */
+    (function () {
+      const screen = document.getElementById('intro-screen');
+      const reduceMotion = window.matchMedia &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      // 이미 입장한 적 있거나(같은 탭 세션) 모션 줄이기 설정이면 바로 갤러리
+      if (reduceMotion || sessionStorage.getItem('hk_entered') === '1') {
+        screen.classList.add('hidden');
+        return;
+      }
+
+      const canvas = document.getElementById('rain');
+      const ctx = canvas.getContext('2d');
+      // 일본어 가타카나 + 숫자 (매트릭스 특유의 문자열)
+      const CHARS = 'アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789';
+      let columns = [], fontSize = 16, rafId = null, lastDraw = 0;
+
+      function resize() {
+        canvas.width = screen.clientWidth;
+        canvas.height = screen.clientHeight;
+        fontSize = Math.max(14, Math.floor(canvas.width / 28));
+        const count = Math.ceil(canvas.width / fontSize);
+        columns = Array.from({ length: count },
+          () => Math.floor(Math.random() * -30));
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+
+      function draw(ts) {
+        rafId = requestAnimationFrame(draw);
+        if (ts - lastDraw < 66) return;   // 약 15fps: 배터리 부담 ↓, 특유의 속도감 유지
+        lastDraw = ts;
+        ctx.fillStyle = 'rgba(0,0,0,0.12)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.font = fontSize + 'px monospace';
+        for (let i = 0; i < columns.length; i++) {
+          const ch = CHARS[Math.floor(Math.random() * CHARS.length)];
+          const y = columns[i] * fontSize;
+          ctx.fillStyle = Math.random() < 0.06 ? '#b6ffb6' : '#0b3';
+          ctx.fillText(ch, i * fontSize, y);
+          if (y > canvas.height && Math.random() > 0.985) columns[i] = 0;
+          columns[i]++;
+        }
+      }
+
+      function stopRain() {
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+
+      function enter() {
+        stopRain();
+        screen.classList.add('hidden');
+        sessionStorage.setItem('hk_entered', '1');
+      }
+
+      document.getElementById('enterBtn').addEventListener('click', enter);
+      document.getElementById('skipBtn').addEventListener('click', enter);
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) { stopRain(); }
+        else if (!screen.classList.contains('hidden') && !rafId) {
+          rafId = requestAnimationFrame(draw);
+        }
+      });
+      window.addEventListener('resize', resize);
+
+      resize();
+      rafId = requestAnimationFrame(draw);
+    })();
+
+    /* ---------- 갤러리 ---------- */
     let data = null;
     let cbSeq = 0;
 
@@ -135,26 +268,47 @@
         b.addEventListener('click', () => render(b.dataset.season)));
     }
 
+    // 1모둠~10모둠 카드는 항상 미리 만들어 둡니다.
+    // 시트에 해당 모둠의 링크가 아직 없으면 "준비 중"으로 보입니다.
+    const FIXED_TEAMS = Array.from({ length: 10 }, (_, i) => (i + 1) + '모둠');
+
     function renderCards() {
       const g = document.getElementById('gallery');
-      if (!data.works.length) {
-        g.innerHTML = '<p class="empty">아직 등록된 작품이 없습니다.</p>';
-        return;
-      }
-      g.innerHTML = data.works.map(w =>
-        '<article class="card">' +
+      const works = data.works || [];
+      const byTeam = {};
+      works.forEach(w => { if (w.team && !byTeam[w.team]) byTeam[w.team] = w; });
+      const seen = {};
+      const extraTeams = [];
+      works.forEach(w => {
+        if (w.team && FIXED_TEAMS.indexOf(w.team) < 0 && !seen[w.team]) {
+          seen[w.team] = true;
+          extraTeams.push(w.team);
+        }
+      });
+      const orderedTeams = FIXED_TEAMS.concat(extraTeams);
+
+      g.innerHTML = orderedTeams.map(team => {
+        const w = byTeam[team];
+        if (!w || !w.link) {
+          return '<article class="card pending">' +
+            '<div class="body">' +
+              '<div class="team">' + esc(team) + '</div>' +
+              '<div class="title">준비 중</div>' +
+              '<div class="desc">작품 링크가 등록되면 여기에 보입니다.</div>' +
+            '</div>' +
+          '</article>';
+        }
+        return '<article class="card">' +
           (w.thumb ? '<img src="' + esc(w.thumb) + '" alt="">' : '') +
           '<div class="body">' +
             '<div class="team">' + esc(w.team) + '</div>' +
-            '<div class="title">' + esc(w.title) + '</div>' +
+            '<div class="title">' + esc(w.title || '작품') + '</div>' +
             '<div class="desc">' + esc(w.desc) + '</div>' +
-            (w.link
-              ? '<a class="view" href="' + esc(w.link) +
-                '" target="_blank" rel="noopener">작품 보러가기</a>'
-              : '') +
+            '<a class="view" href="' + esc(w.link) +
+              '" target="_blank" rel="noopener">작품 보러가기</a>' +
           '</div>' +
-        '</article>'
-      ).join('');
+        '</article>';
+      }).join('');
     }
 
     render();
