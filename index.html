@@ -228,23 +228,22 @@
     .season-bar button.on { background: #4f46e5; color: #fff; border-color: #4f46e5; }
     main {
       max-width: 720px; margin: 0 auto; padding: 16px;
-      display: grid; gap: 14px;
+      display: grid; gap: 12px; grid-template-columns: 1fr 1fr;
     }
-    @media (min-width: 560px) { main { grid-template-columns: 1fr 1fr; } }
     .card {
       background: #fff; border-radius: 14px; overflow: hidden;
       box-shadow: 0 1px 4px rgba(0,0,0,.08);
       display: flex; flex-direction: column;
     }
     .card img { width: 100%; aspect-ratio: 16/9; object-fit: cover; background: #e9ebf0; }
-    .card .body { padding: 14px 16px 16px; flex: 1; display: flex; flex-direction: column; gap: 6px; }
+    .card .body { padding: 12px 12px 14px; flex: 1; display: flex; flex-direction: column; gap: 6px; }
     .team { font-size: .8rem; font-weight: 700; color: #4f46e5; }
-    .title { font-size: 1.05rem; font-weight: 700; }
+    .title { font-size: 1rem; font-weight: 700; }
     .desc { font-size: .9rem; color: #555; flex: 1; white-space: pre-line; }
     .view {
       display: inline-block; margin-top: 8px; text-align: center;
       background: #111827; color: #fff !important; text-decoration: none;
-      border-radius: 8px; padding: 10px 12px; font-size: .9rem; font-weight: 600;
+      border-radius: 8px; padding: 9px 8px; font-size: .85rem; font-weight: 600;
     }
     .card.pending { border: 1.5px dashed #c9cedb; box-shadow: none; }
     .card.pending .title { color: #8a90a0; }
@@ -710,6 +709,21 @@
         b.addEventListener('click', () => render(b.dataset.season)));
     }
 
+    // 썸네일 주소 정리: 일반 이미지 주소는 그대로 쓰고,
+    // Google 드라이브 공유 링크(/file/d/... 또는 open?id=...)는
+    // 갤러리가 바로 보여줄 수 있는 미리보기 주소로 바꿉니다.
+    // (드라이브 파일은 "링크가 있는 모든 사용자에게 공개" 상태여야 합니다)
+    function thumbUrl(u) {
+      u = String(u || '').trim();
+      if (!u) return '';
+      var m = u.match(/drive\.google\.com\/file\/d\/([A-Za-z0-9_-]+)/);
+      if (!m && u.indexOf('drive.google.com') >= 0) {
+        m = u.match(/[?&]id=([A-Za-z0-9_-]+)/);
+      }
+      if (m) return 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w1200';
+      return u;
+    }
+
     // 시트의 i번째 줄이 i번 자리 카드입니다 (줄 순서 = 모둠 자리).
     // 모둠 이름 칸을 바꾸면 갤러리에도 그대로 반영되고,
     // 이름 칸이 비어 있으면 "n모둠"으로 표시합니다.
@@ -733,7 +747,7 @@
           continue;
         }
         html.push('<article class="card">' +
-          (w.thumb ? '<img src="' + esc(w.thumb) + '" alt="">' : '') +
+          (thumbUrl(w.thumb) ? '<img src="' + esc(thumbUrl(w.thumb)) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : '') +
           '<div class="body">' +
             '<div class="team">' + esc(team) + '</div>' +
             '<div class="title">' + esc(w.title || '작품') + '</div>' +
