@@ -93,6 +93,25 @@
       box-shadow: 0 2px 10px rgba(0,0,0,.35);
     }
     #musicBtn:active { transform: scale(.94); }
+    #musicBtn.attn { border-color: #5eea90; animation: btnPulse 1.6s ease-in-out infinite; }
+    @keyframes btnPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(94,234,144,.55); }
+      50%      { box-shadow: 0 0 0 9px rgba(94,234,144,0); }
+    }
+
+    /* ===== 음악 안내 말풍선 (재생 전 / 재생이 막혔을 때 표시) ===== */
+    #musicHint {
+      position: fixed; right: 12px; bottom: 68px; z-index: 80;
+      padding: 9px 15px; border-radius: 999px;
+      border: 1px solid rgba(185,245,207,.45);
+      background: rgba(10,20,14,.88); color: #b9f5cf;
+      font-size: .88rem; font-weight: 700;
+      box-shadow: 0 2px 10px rgba(0,0,0,.35);
+      display: none; pointer-events: none; white-space: nowrap;
+      animation: hintPulse 1.6s ease-in-out infinite;
+    }
+    #musicHint.show { display: block; }
+    @keyframes hintPulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
 
     /* ===== 설명 캐러셀 (팝업) : 배경은 매트릭스 글자 비 ===== */
     #carousel-screen {
@@ -124,15 +143,16 @@
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
       text-align: center; padding: 24px 28px;
+      overflow-y: auto;
     }
     .slide-emoji { font-size: 3rem; margin-bottom: 18px; }
     .slide h2 {
-      font-size: clamp(1.4rem, 6vw, 2rem); margin-bottom: 16px;
+      font-size: clamp(1.65rem, 6vw, 2.25rem); margin-bottom: 16px;
       color: #86f7b0;
       text-shadow: 0 0 14px rgba(94,234,144,.35);
     }
     .slide p {
-      max-width: 560px; font-size: clamp(.98rem, 4.2vw, 1.12rem);
+      max-width: 560px; font-size: clamp(1.23rem, 4.2vw, 1.37rem);
       color: #d5e9dc; white-space: pre-line;
     }
     .car-ui { position: relative; z-index: 1; padding: 12px 20px 26px; text-align: center; }
@@ -279,6 +299,8 @@
 
   <!-- 우하단: 배경 음악 켜기/끄기 -->
   <button id="musicBtn" aria-label="배경 음악 켜기/끄기" aria-pressed="true" title="배경 음악">🎵</button>
+  <div id="musicHint" role="status">🎵 탭하면 음악이 나와요</div>
+  <audio id="bgmAudio" loop preload="auto"></audio>
 
   <!-- 해커톤 설명 캐러셀 (팝업) : 배경에 매트릭스 글자 비 -->
   <div id="carousel-screen" class="hidden" role="dialog" aria-label="해커톤 소개">
@@ -765,23 +787,31 @@
 
   <script>
     /* ============================================
-       배경 음악: Web Audio로 실시간 합성한 오리지널 루프
+       배경 음악: 오리지널 서스펜스 루프
        - 미션 임파서블 '느낌'만 참고 (5/4박자 저음 펄스 + 은은한 멜로디)
          실제 주제곡 멜로디/음원은 전혀 사용하지 않은 새 곡입니다.
+       - 아이폰 무음(벨소리 끔) 스위치에서도 소리가 나도록,
+         합성한 음악을 WAV로 미리 그려서 <audio> 태그로 재생합니다.
+         (Web Audio API는 아이폰 무음 스위치에 음소거되지만,
+          <audio> 미디어 재생은 무음 스위치와 상관없이 소리가 납니다.)
        - 브라우저 정책상 첫 터치/클릭 후에 시작됩니다.
        - 갤러리 화면에서는 볼륨이 낮아지고, 탭을 숨기면 일시정지합니다.
+       - 오프라인 렌더가 안 되는 옛날 브라우저에서는 실시간 Web Audio로
+         대체 재생합니다.
        ============================================ */
     (function () {
       const musicBtn = document.getElementById('musicBtn');
-      const VOL_HIGH = 0.20;  // 인트로/설명 화면
-      const VOL_LOW  = 0.09;  // 갤러리 화면
-      let ctx = null, master = null, delaySend = null;
-      let started = false, muted = false, suspendedByHide = false;
-      let targetVol = VOL_HIGH;
-      let schedTimer = null, nextEighth = 0, eighthIdx = 0;
+      const musicHint = document.getElementById('musicHint');
+      const audioEl = document.getElementById('bgmAudio');
+      let started = false, muted = false, resumeOnShow = false, pendingStart = false;
+      let screenVol = 'high';
+      let mode = 'none';              // 'element' | 'webaudio'
+      let renderRms = 0, renderPeak = 0, renderErr = '';
 
       const BPM = 112;
       const EIGHTH = 60 / BPM / 2;      // 8분음표 길이(초), 한 마디(5/4) = 10개
+      const LOOP_EIGHTHS = 40;          // 4마디 = 1루프
+      const LOOP_LEN = LOOP_EIGHTHS * EIGHTH;
       // 저음 베이스 진행: A A F G (4마디 순환) - 오리지널
       const BASS_ROOTS = [55.00, 55.00, 43.65, 49.00];
       // 한 마디(10개의 8분음표) 안에서 베이스가 울리는 위치와 강세
@@ -791,171 +821,304 @@
         1: [{ e: 0, f: 329.63 }, { e: 3, f: 293.66 }, { e: 6, f: 261.63 }],
         3: [{ e: 0, f: 392.00 }, { e: 3, f: 329.63 }, { e: 7, f: 293.66 }]
       };
-      let noiseBuf = null;
+      // 드론 주파수를 루프 길이의 정수배로 맞춰 루프 이음새가 안 들리게 함
+      const DRONE_FREQS = [589, 596, 1183].map(function (k) { return k / LOOP_LEN; });
+      // 화면별 볼륨 (element: 렌더된 WAV 재생 / webaudio: 실시간 합성 대체)
+      const VOLS = {
+        element:  { high: 0.85, low: 0.45 },
+        webaudio: { high: 0.20, low: 0.09 }
+      };
 
-      function makeNoise() {
-        const len = Math.floor(ctx.sampleRate * 0.5);
-        const buf = ctx.createBuffer(1, len, ctx.sampleRate);
-        const d = buf.getChannelData(0);
-        for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-        return buf;
-      }
-
-      function initAudio() {
-        ctx = new (window.AudioContext || window.webkitAudioContext)();
-        master = ctx.createGain();
-        master.gain.value = 0;
-        master.connect(ctx.destination);
+      /* ---- 신스 그래프: 라이브/오프라인 렌더 공용 ---- */
+      function createSynth(context, master) {
         // 멜로디용 에코(딜레이) - 신비로운 울림
-        const delay = ctx.createDelay(1.0);
+        const delay = context.createDelay(1.0);
         delay.delayTime.value = EIGHTH * 3;
-        const fb = ctx.createGain(); fb.gain.value = 0.32;
-        const wet = ctx.createGain(); wet.gain.value = 0.22;
-        delaySend = ctx.createGain(); delaySend.gain.value = 1;
+        const fb = context.createGain(); fb.gain.value = 0.32;
+        const wet = context.createGain(); wet.gain.value = 0.22;
+        const delaySend = context.createGain(); delaySend.gain.value = 1;
         delaySend.connect(delay); delay.connect(fb); fb.connect(delay);
         delay.connect(wet); wet.connect(master);
-        noiseBuf = makeNoise();
-        // 아주 낮은 드론(공기감)
-        [55, 55.6, 110.4].forEach(f => {
-          const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f;
-          const g = ctx.createGain(); g.gain.value = 0.022;
-          o.connect(g); g.connect(master); o.start();
-        });
-      }
 
-      function bassNote(t, freq, accent) {
-        const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = freq;
-        const flt = ctx.createBiquadFilter(); flt.type = 'lowpass';
-        flt.frequency.setValueAtTime(420 + 500 * accent, t);
-        flt.frequency.exponentialRampToValueAtTime(140, t + 0.22);
-        flt.Q.value = 6;
-        const g = ctx.createGain();
-        g.gain.setValueAtTime(0.0001, t);
-        g.gain.exponentialRampToValueAtTime(0.34 * accent, t + 0.012);
-        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
-        o.connect(flt); flt.connect(g); g.connect(master);
-        o.start(t); o.stop(t + 0.3);
-      }
-      function kick(t) {
-        const o = ctx.createOscillator(); o.type = 'sine';
-        o.frequency.setValueAtTime(120, t);
-        o.frequency.exponentialRampToValueAtTime(38, t + 0.16);
-        const g = ctx.createGain();
-        g.gain.setValueAtTime(0.5, t);
-        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
-        o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.25);
-      }
-      function hat(t, open) {
-        const s = ctx.createBufferSource(); s.buffer = noiseBuf;
-        const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 7000;
-        const g = ctx.createGain();
-        const dur = open ? 0.09 : 0.035;
-        g.gain.setValueAtTime(open ? 0.06 : 0.045, t);
-        g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-        s.connect(f); f.connect(g); g.connect(master);
-        s.start(t); s.stop(t + dur + 0.02);
-      }
-      function pluck(t, freq) {
-        const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = freq;
-        const g = ctx.createGain();
-        g.gain.setValueAtTime(0.0001, t);
-        g.gain.exponentialRampToValueAtTime(0.16, t + 0.008);
-        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
-        o.connect(g); g.connect(master); g.connect(delaySend);
-        o.start(t); o.stop(t + 0.55);
-      }
+        const nLen = Math.floor(context.sampleRate * 0.5);
+        const noiseBuf = context.createBuffer(1, nLen, context.sampleRate);
+        const nd = noiseBuf.getChannelData(0);
+        for (let i = 0; i < nLen; i++) nd[i] = Math.random() * 2 - 1;
 
-      function scheduleEighth(t, idx) {
-        const inBar = idx % 10;          // 5/4 마디 안 위치
-        const bar = Math.floor(idx / 10) % 4;
-        if (BASS_HITS[inBar] !== undefined) {
-          bassNote(t, BASS_ROOTS[bar], BASS_HITS[inBar]);
+        function bassNote(t, freq, accent) {
+          const o = context.createOscillator(); o.type = 'sawtooth'; o.frequency.value = freq;
+          const flt = context.createBiquadFilter(); flt.type = 'lowpass';
+          flt.frequency.setValueAtTime(420 + 500 * accent, t);
+          flt.frequency.exponentialRampToValueAtTime(140, t + 0.22);
+          flt.Q.value = 6;
+          const g = context.createGain();
+          g.gain.setValueAtTime(0.0001, t);
+          g.gain.exponentialRampToValueAtTime(0.34 * accent, t + 0.012);
+          g.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
+          o.connect(flt); flt.connect(g); g.connect(master);
+          o.start(t); o.stop(t + 0.3);
         }
-        if (inBar === 0 || inBar === 6) kick(t);          // 1박·4박 쿵
-        if (inBar % 2 === 1) hat(t, inBar === 7);         // 엇박 챙챙
-        (PLUCK_BARS[bar] || []).forEach(n => {
-          if (n.e === inBar) pluck(t, n.f);
+        function kick(t) {
+          const o = context.createOscillator(); o.type = 'sine';
+          o.frequency.setValueAtTime(120, t);
+          o.frequency.exponentialRampToValueAtTime(38, t + 0.16);
+          const g = context.createGain();
+          g.gain.setValueAtTime(0.5, t);
+          g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+          o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.25);
+        }
+        function hat(t, open) {
+          const s = context.createBufferSource(); s.buffer = noiseBuf;
+          const f = context.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 7000;
+          const g = context.createGain();
+          const dur = open ? 0.09 : 0.035;
+          g.gain.setValueAtTime(open ? 0.06 : 0.045, t);
+          g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+          s.connect(f); f.connect(g); g.connect(master);
+          s.start(t); s.stop(t + dur + 0.02);
+        }
+        function pluck(t, freq) {
+          const o = context.createOscillator(); o.type = 'triangle'; o.frequency.value = freq;
+          const g = context.createGain();
+          g.gain.setValueAtTime(0.0001, t);
+          g.gain.exponentialRampToValueAtTime(0.16, t + 0.008);
+          g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+          o.connect(g); g.connect(master); g.connect(delaySend);
+          o.start(t); o.stop(t + 0.55);
+        }
+        function scheduleEighth(t, idx) {
+          const inBar = idx % 10;          // 5/4 마디 안 위치
+          const bar = Math.floor(idx / 10) % 4;
+          if (BASS_HITS[inBar] !== undefined) bassNote(t, BASS_ROOTS[bar], BASS_HITS[inBar]);
+          if (inBar === 0 || inBar === 6) kick(t);          // 1박·4박 쿵
+          if (inBar % 2 === 1) hat(t, inBar === 7);         // 엇박 챙챙
+          (PLUCK_BARS[bar] || []).forEach(function (n) { if (n.e === inBar) pluck(t, n.f); });
+        }
+        return { scheduleEighth: scheduleEighth };
+      }
+
+      // 아주 낮은 드론(공기감)
+      function addDrones(context, master, t0, dur) {
+        DRONE_FREQS.forEach(function (f) {
+          const o = context.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+          const g = context.createGain(); g.gain.value = 0.022;
+          o.connect(g); g.connect(master); o.start(t0);
+          if (isFinite(dur)) o.stop(t0 + dur);
         });
       }
 
-      function schedulerTick() {
+      /* ---- WAV 인코딩 (16bit PCM mono → data URI) ---- */
+      function wavDataUri(samples, sampleRate, scale) {
+        const n = samples.length;
+        const buf = new ArrayBuffer(44 + n * 2);
+        const v = new DataView(buf);
+        function wstr(o, s) { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); }
+        wstr(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); wstr(8, 'WAVE');
+        wstr(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true);
+        v.setUint16(22, 1, true); v.setUint32(24, sampleRate, true);
+        v.setUint32(28, sampleRate * 2, true); v.setUint16(32, 2, true);
+        v.setUint16(34, 16, true); wstr(36, 'data'); v.setUint32(40, n * 2, true);
+        for (let i = 0; i < n; i++) {
+          const s = Math.max(-1, Math.min(1, samples[i] * scale));
+          v.setInt16(44 + i * 2, s < 0 ? s * 32768 : s * 32767, true);
+        }
+        const bytes = new Uint8Array(buf);
+        let bin = '';
+        const CH = 0x8000;
+        for (let i = 0; i < bytes.length; i += CH) {
+          bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+        }
+        return 'data:audio/wav;base64,' + btoa(bin);
+      }
+
+      /* ---- 오프라인 렌더: 8마디를 그리고 뒤 4마디를 루프로 사용 ----
+         (앞 4마디로 에코 상태가 안정된 뒤 구간을 잘라내므로 이음새가 깨끗함) */
+      function renderLoop() {
+        const SR = 44100;
+        const total = LOOP_LEN * 2;
+        const Off = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+        if (!Off) return Promise.reject(new Error('OfflineAudioContext 없음'));
+        const off = new Off(1, Math.ceil(total * SR), SR);
+        const master = off.createGain(); master.gain.value = 1;
+        master.connect(off.destination);
+        const synth = createSynth(off, master);
+        addDrones(off, master, 0, total);
+        const n = Math.round(total / EIGHTH);
+        for (let i = 0; i < n; i++) synth.scheduleEighth(i * EIGHTH, i);
+        return off.startRendering().then(function (buf) {
+          const d = buf.getChannelData(0);
+          const start = Math.floor(LOOP_LEN * SR);
+          const len = Math.floor(LOOP_LEN * SR);
+          const seg = d.slice(start, start + len);
+          let peak = 0, sum = 0;
+          for (let i = 0; i < seg.length; i++) {
+            const a = Math.abs(seg[i]);
+            if (a > peak) peak = a;
+            sum += seg[i] * seg[i];
+          }
+          renderPeak = peak;
+          renderRms = Math.sqrt(sum / seg.length);
+          const scale = peak > 0 ? Math.min(1, 0.89 / peak) : 1;
+          audioEl.src = wavDataUri(seg, SR, scale);
+          mode = 'element';
+        });
+      }
+
+      /* ---- 대체 경로: 실시간 Web Audio (오프라인 렌더가 안 될 때) ---- */
+      let ctx = null, liveMaster = null, liveSynth = null;
+      let schedTimer = null, nextEighth = 0, eighthIdx = 0;
+      function initLive() {
+        ctx = new (window.AudioContext || window.webkitAudioContext)();
+        liveMaster = ctx.createGain(); liveMaster.gain.value = 0;
+        liveMaster.connect(ctx.destination);
+        liveSynth = createSynth(ctx, liveMaster);
+        addDrones(ctx, liveMaster, ctx.currentTime, Infinity);
+      }
+      function liveTick() {
         if (!ctx) return;
         while (nextEighth < ctx.currentTime + 0.18) {
-          scheduleEighth(nextEighth, eighthIdx);
+          liveSynth.scheduleEighth(nextEighth, eighthIdx);
           nextEighth += EIGHTH;
           eighthIdx++;
         }
       }
 
-      function applyVolume(v) {
-        targetVol = v;
-        if (master && !muted) {
-          master.gain.cancelScheduledValues(ctx.currentTime);
-          master.gain.setTargetAtTime(v, ctx.currentTime, 0.4);
-        }
-      }
+      function showHint() { musicHint.classList.add('show'); musicBtn.classList.add('attn'); }
+      function hideHint() { musicHint.classList.remove('show'); musicBtn.classList.remove('attn'); }
       function refreshBtn() {
         musicBtn.textContent = muted ? '🔇' : '🎵';
         musicBtn.setAttribute('aria-pressed', muted ? 'false' : 'true');
       }
+      function volNow() { return VOLS[mode === 'webaudio' ? 'webaudio' : 'element'][screenVol]; }
+      function applyVolume(screen) {
+        screenVol = screen;
+        const v = volNow();
+        if (mode === 'element') audioEl.volume = v;
+        else if (mode === 'webaudio' && ctx && !muted) {
+          liveMaster.gain.cancelScheduledValues(ctx.currentTime);
+          liveMaster.gain.setTargetAtTime(v, ctx.currentTime, 0.4);
+        }
+      }
+      function tryElementPlay() {
+        const p = audioEl.play();
+        if (p && p.catch) p.catch(function () { showHint(); });
+        return p;
+      }
 
       function start() {
         if (started) return;
-        started = true;
-        initAudio();
-        ctx.resume();
-        nextEighth = ctx.currentTime + 0.06;
-        schedTimer = setInterval(schedulerTick, 40);
-        applyVolume(targetVol);
-        refreshBtn();
+        if (mode === 'element' && audioEl.src) {
+          audioEl.volume = volNow();
+          audioEl.muted = false;
+          const p = tryElementPlay();
+          if (p && p.then) {
+            p.then(function () { started = true; hideHint(); refreshBtn(); });
+          } else {
+            started = true; hideHint(); refreshBtn();
+          }
+        } else if (mode === 'webaudio') {
+          if (!ctx) {
+            initLive();
+            nextEighth = ctx.currentTime + 0.06;
+            schedTimer = setInterval(liveTick, 40);
+          }
+          ctx.resume();
+          liveMaster.gain.cancelScheduledValues(ctx.currentTime);
+          liveMaster.gain.setTargetAtTime(muted ? 0.0001 : volNow(), ctx.currentTime, 0.3);
+          started = true; hideHint(); refreshBtn();
+        } else {
+          pendingStart = true;   // 렌더가 끝나면 다시 시도
+          showHint();
+        }
       }
 
       // 첫 터치/클릭 어디든 음악 시작 (브라우저 자동재생 정책)
-      document.addEventListener('pointerdown', function once() {
-        if (!muted) start();
-        document.removeEventListener('pointerdown', once);
-      }, { capture: true });
+      // - 🎵 버튼 위 첫 탭은 버튼 핸들러에 맡김 (첫 탭 = 켜기)
+      // - 시작 후 시스템(전화 등)이 멈춘 경우 아무 탭이나 재개
+      function onGesture(e) {
+        if (muted) return;
+        if (!started) {
+          if (e.target && e.target.closest && e.target.closest('#musicBtn')) return;
+          start();
+        } else if (mode === 'element' && audioEl.paused && !document.hidden) {
+          tryElementPlay();
+        }
+      }
+      ['pointerdown', 'touchend', 'click'].forEach(function (ev) {
+        document.addEventListener(ev, onGesture, { capture: true });
+      });
 
       // 화면별 볼륨: 갤러리에서는 낮게, 첫 화면/설명에서는 기본
-      document.getElementById('enterBtn').addEventListener('click', () => applyVolume(VOL_LOW));
-      document.getElementById('homeBtn').addEventListener('click', () => applyVolume(VOL_HIGH));
+      document.getElementById('enterBtn').addEventListener('click', function () { applyVolume('low'); });
+      document.getElementById('homeBtn').addEventListener('click', function () { applyVolume('high'); });
 
-      // 음악 버튼: 켜기/끄기 (첫 터치가 이 버튼이면 꺼진 상태로 시작)
-      musicBtn.addEventListener('click', () => {
-        muted = !muted;
-        if (!started) {          // 아직 시작 전에 끄기를 누른 경우
+      // 음악 버튼: 시작 전 첫 탭은 '켜기', 이후에는 켜기/끄기
+      musicBtn.addEventListener('click', function () {
+        if (!started) {
+          muted = false;
+          start();
           refreshBtn();
-          document.addEventListener('pointerdown', function later() {
-            if (!muted) start();
-            document.removeEventListener('pointerdown', later);
-          }, { capture: true });
           return;
         }
-        if (muted) {
-          master.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.15);
-        } else {
-          if (ctx.state === 'suspended') ctx.resume();
-          master.gain.setTargetAtTime(targetVol, ctx.currentTime, 0.15);
+        muted = !muted;
+        if (mode === 'element') {
+          audioEl.muted = muted;
+          if (!muted && audioEl.paused) tryElementPlay();
+        } else if (mode === 'webaudio' && ctx) {
+          if (muted) {
+            liveMaster.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.15);
+          } else {
+            if (ctx.state === 'suspended') ctx.resume();
+            liveMaster.gain.setTargetAtTime(volNow(), ctx.currentTime, 0.15);
+          }
         }
         refreshBtn();
       });
 
       // 탭이 숨겨지면 일시정지, 돌아오면 다시 재생
-      document.addEventListener('visibilitychange', () => {
+      document.addEventListener('visibilitychange', function () {
         if (!started) return;
         if (document.hidden) {
-          if (ctx.state === 'running') { suspendedByHide = true; ctx.suspend(); }
-        } else if (suspendedByHide) {
-          suspendedByHide = false;
-          if (!muted) ctx.resume();
+          resumeOnShow = false;
+          if (mode === 'element') {
+            resumeOnShow = !audioEl.paused && !muted;
+            audioEl.pause();
+          } else if (mode === 'webaudio' && ctx && ctx.state === 'running') {
+            resumeOnShow = true;
+            ctx.suspend();
+          }
+        } else if (resumeOnShow) {
+          resumeOnShow = false;
+          if (mode === 'element') tryElementPlay();
+          else if (mode === 'webaudio' && ctx && !muted) ctx.resume();
         }
       });
 
       // 검증용 상태 확인
       window.__bgm = {
-        state: () => ({ started, muted, ctxState: ctx ? ctx.state : 'none', vol: targetVol })
+        state: function () {
+          return {
+            started: started, muted: muted, mode: mode, screenVol: screenVol,
+            ctxState: ctx ? ctx.state : 'none',
+            elSrcBytes: audioEl.src ? audioEl.src.length : 0,
+            elPaused: audioEl.paused, elTime: audioEl.currentTime,
+            elVolume: audioEl.volume,
+            renderRms: renderRms, renderPeak: renderPeak, renderErr: renderErr,
+            hintShown: musicHint.classList.contains('show')
+          };
+        }
       };
+
+      // 초기 상태: 탭하면 재생된다는 안내를 보여 줌
+      showHint();
       refreshBtn();
+      // 페이지를 열자마자 음악 렌더 시작 (소리는 안 남, 제스처 불필요)
+      renderLoop().then(function () {
+        if (pendingStart && !started && !muted) start();
+      }).catch(function (e) {
+        renderErr = String((e && e.message) || e);
+        mode = 'webaudio';
+      });
     })();
 
   </script>
