@@ -54,7 +54,7 @@
 
     /* ===== 우측 상단 통통 튀는 "해커톤이란?" 말풍선 ===== */
     #helpBubble {
-      position: fixed; top: 14px; right: 14px; z-index: 60;
+      position: fixed; top: 8px; right: 8px; z-index: 60;
       padding: 11px 18px; border: none; border-radius: 999px;
       background: #21d921; color: #001600;
       font-size: .92rem; font-weight: 800; letter-spacing: .02em;
@@ -73,7 +73,7 @@
 
     /* ===== 갤러리에서 첫 화면으로 돌아가는 버튼 ===== */
     #homeBtn {
-      position: fixed; top: 14px; left: 14px; z-index: 60;
+      position: fixed; top: 8px; left: 8px; z-index: 60;
       display: none;
       padding: 11px 18px; border-radius: 999px;
       border: 1px solid #d0d3dd; background: rgba(255,255,255,.96);
@@ -201,9 +201,9 @@
     /* ===== 갤러리 ===== */
     header {
       background: linear-gradient(135deg, #4f46e5, #7c3aed);
-      color: #fff; padding: 52px 20px 24px; text-align: center;
+      color: #fff; padding: 58px 20px 22px; text-align: center;
     }
-    header h1 { font-size: 1.5rem; margin-bottom: 8px; }
+    header h1 { font-size: 1.5rem; margin-bottom: 6px; }
     header p { font-size: .95rem; opacity: .92; white-space: pre-line; }
     .season-bar {
       display: flex; gap: 8px; flex-wrap: wrap;
@@ -446,7 +446,8 @@
       carCanvas.height = carouselScreen.clientHeight || window.innerHeight;
       carFont = Math.max(13, Math.floor(carCanvas.width / 22));
       const count = Math.ceil(carCanvas.width / carFont);
-      carCols = Array.from({ length: count }, () => Math.floor(Math.random() * -40));
+      carCols = Array.from({ length: count }, () =>
+        Math.floor(Math.random() * (carCanvas.height / carFont + 40)) - 40);
       carCtx.fillStyle = '#020604';
       carCtx.fillRect(0, 0, carCanvas.width, carCanvas.height);
     }
@@ -454,7 +455,7 @@
       carRaf = requestAnimationFrame(drawCarRain);
       if (ts - carLast < 55) return;   // 약 18fps
       carLast = ts;
-      carCtx.fillStyle = 'rgba(2,6,4,0.14)';
+      carCtx.fillStyle = 'rgba(2,6,4,0.11)';
       carCtx.fillRect(0, 0, carCanvas.width, carCanvas.height);
       carCtx.font = carFont + 'px monospace';
       for (let i = 0; i < carCols.length; i++) {
