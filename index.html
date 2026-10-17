@@ -83,6 +83,17 @@
     #homeBtn.show { display: block; }
     #homeBtn:active { transform: scale(.96); }
 
+    /* ===== 배경 음악 재생/음소거 버튼 (우하단, 기존 상단 버튼과 겹치지 않음) ===== */
+    #musicBtn {
+      position: fixed; right: 12px; bottom: 12px; z-index: 80;
+      width: 46px; height: 46px; border-radius: 50%;
+      border: 1px solid rgba(255,255,255,.35);
+      background: rgba(10,20,14,.72); color: #b9f5cf;
+      font-size: 1.2rem; line-height: 1; cursor: pointer;
+      box-shadow: 0 2px 10px rgba(0,0,0,.35);
+    }
+    #musicBtn:active { transform: scale(.94); }
+
     /* ===== 설명 캐러셀 (팝업) : 배경은 매트릭스 글자 비 ===== */
     #carousel-screen {
       position: fixed; inset: 0; z-index: 70;
@@ -266,6 +277,9 @@
 
   <!-- 갤러리 → 첫 화면으로 돌아가는 버튼 -->
   <button id="homeBtn" aria-label="처음 화면으로 돌아가기">← 처음으로</button>
+
+  <!-- 우하단: 배경 음악 켜기/끄기 -->
+  <button id="musicBtn" aria-label="배경 음악 켜기/끄기" aria-pressed="true" title="배경 음악">🎵</button>
 
   <!-- 해커톤 설명 캐러셀 (팝업) : 배경에 매트릭스 글자 비 -->
   <div id="carousel-screen" class="hidden" role="dialog" aria-label="해커톤 소개">
@@ -733,6 +747,203 @@
     }
 
     render();
+  </script>
+
+  <script>
+    /* ============================================
+       배경 음악: Web Audio로 실시간 합성한 오리지널 루프
+       - 미션 임파서블 '느낌'만 참고 (5/4박자 저음 펄스 + 은은한 멜로디)
+         실제 주제곡 멜로디/음원은 전혀 사용하지 않은 새 곡입니다.
+       - 브라우저 정책상 첫 터치/클릭 후에 시작됩니다.
+       - 갤러리 화면에서는 볼륨이 낮아지고, 탭을 숨기면 일시정지합니다.
+       ============================================ */
+    (function () {
+      const musicBtn = document.getElementById('musicBtn');
+      const VOL_HIGH = 0.20;  // 인트로/설명 화면
+      const VOL_LOW  = 0.09;  // 갤러리 화면
+      let ctx = null, master = null, delaySend = null;
+      let started = false, muted = false, suspendedByHide = false;
+      let targetVol = VOL_HIGH;
+      let schedTimer = null, nextEighth = 0, eighthIdx = 0;
+
+      const BPM = 112;
+      const EIGHTH = 60 / BPM / 2;      // 8분음표 길이(초), 한 마디(5/4) = 10개
+      // 저음 베이스 진행: A A F G (4마디 순환) - 오리지널
+      const BASS_ROOTS = [55.00, 55.00, 43.65, 49.00];
+      // 한 마디(10개의 8분음표) 안에서 베이스가 울리는 위치와 강세
+      const BASS_HITS = { 0: 1.0, 3: 0.7, 5: 0.9, 7: 0.7, 8: 0.55 };
+      // 은은한 '궁금증' 멜로디 (2,4마디에만): 오리지널 3음 구절
+      const PLUCK_BARS = {
+        1: [{ e: 0, f: 329.63 }, { e: 3, f: 293.66 }, { e: 6, f: 261.63 }],
+        3: [{ e: 0, f: 392.00 }, { e: 3, f: 329.63 }, { e: 7, f: 293.66 }]
+      };
+      let noiseBuf = null;
+
+      function makeNoise() {
+        const len = Math.floor(ctx.sampleRate * 0.5);
+        const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+        return buf;
+      }
+
+      function initAudio() {
+        ctx = new (window.AudioContext || window.webkitAudioContext)();
+        master = ctx.createGain();
+        master.gain.value = 0;
+        master.connect(ctx.destination);
+        // 멜로디용 에코(딜레이) - 신비로운 울림
+        const delay = ctx.createDelay(1.0);
+        delay.delayTime.value = EIGHTH * 3;
+        const fb = ctx.createGain(); fb.gain.value = 0.32;
+        const wet = ctx.createGain(); wet.gain.value = 0.22;
+        delaySend = ctx.createGain(); delaySend.gain.value = 1;
+        delaySend.connect(delay); delay.connect(fb); fb.connect(delay);
+        delay.connect(wet); wet.connect(master);
+        noiseBuf = makeNoise();
+        // 아주 낮은 드론(공기감)
+        [55, 55.6, 110.4].forEach(f => {
+          const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+          const g = ctx.createGain(); g.gain.value = 0.022;
+          o.connect(g); g.connect(master); o.start();
+        });
+      }
+
+      function bassNote(t, freq, accent) {
+        const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = freq;
+        const flt = ctx.createBiquadFilter(); flt.type = 'lowpass';
+        flt.frequency.setValueAtTime(420 + 500 * accent, t);
+        flt.frequency.exponentialRampToValueAtTime(140, t + 0.22);
+        flt.Q.value = 6;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.34 * accent, t + 0.012);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
+        o.connect(flt); flt.connect(g); g.connect(master);
+        o.start(t); o.stop(t + 0.3);
+      }
+      function kick(t) {
+        const o = ctx.createOscillator(); o.type = 'sine';
+        o.frequency.setValueAtTime(120, t);
+        o.frequency.exponentialRampToValueAtTime(38, t + 0.16);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.5, t);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+        o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.25);
+      }
+      function hat(t, open) {
+        const s = ctx.createBufferSource(); s.buffer = noiseBuf;
+        const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 7000;
+        const g = ctx.createGain();
+        const dur = open ? 0.09 : 0.035;
+        g.gain.setValueAtTime(open ? 0.06 : 0.045, t);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        s.connect(f); f.connect(g); g.connect(master);
+        s.start(t); s.stop(t + dur + 0.02);
+      }
+      function pluck(t, freq) {
+        const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = freq;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.16, t + 0.008);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+        o.connect(g); g.connect(master); g.connect(delaySend);
+        o.start(t); o.stop(t + 0.55);
+      }
+
+      function scheduleEighth(t, idx) {
+        const inBar = idx % 10;          // 5/4 마디 안 위치
+        const bar = Math.floor(idx / 10) % 4;
+        if (BASS_HITS[inBar] !== undefined) {
+          bassNote(t, BASS_ROOTS[bar], BASS_HITS[inBar]);
+        }
+        if (inBar === 0 || inBar === 6) kick(t);          // 1박·4박 쿵
+        if (inBar % 2 === 1) hat(t, inBar === 7);         // 엇박 챙챙
+        (PLUCK_BARS[bar] || []).forEach(n => {
+          if (n.e === inBar) pluck(t, n.f);
+        });
+      }
+
+      function schedulerTick() {
+        if (!ctx) return;
+        while (nextEighth < ctx.currentTime + 0.18) {
+          scheduleEighth(nextEighth, eighthIdx);
+          nextEighth += EIGHTH;
+          eighthIdx++;
+        }
+      }
+
+      function applyVolume(v) {
+        targetVol = v;
+        if (master && !muted) {
+          master.gain.cancelScheduledValues(ctx.currentTime);
+          master.gain.setTargetAtTime(v, ctx.currentTime, 0.4);
+        }
+      }
+      function refreshBtn() {
+        musicBtn.textContent = muted ? '🔇' : '🎵';
+        musicBtn.setAttribute('aria-pressed', muted ? 'false' : 'true');
+      }
+
+      function start() {
+        if (started) return;
+        started = true;
+        initAudio();
+        ctx.resume();
+        nextEighth = ctx.currentTime + 0.06;
+        schedTimer = setInterval(schedulerTick, 40);
+        applyVolume(targetVol);
+        refreshBtn();
+      }
+
+      // 첫 터치/클릭 어디든 음악 시작 (브라우저 자동재생 정책)
+      document.addEventListener('pointerdown', function once() {
+        if (!muted) start();
+        document.removeEventListener('pointerdown', once);
+      }, { capture: true });
+
+      // 화면별 볼륨: 갤러리에서는 낮게, 첫 화면/설명에서는 기본
+      document.getElementById('enterBtn').addEventListener('click', () => applyVolume(VOL_LOW));
+      document.getElementById('homeBtn').addEventListener('click', () => applyVolume(VOL_HIGH));
+
+      // 음악 버튼: 켜기/끄기 (첫 터치가 이 버튼이면 꺼진 상태로 시작)
+      musicBtn.addEventListener('click', () => {
+        muted = !muted;
+        if (!started) {          // 아직 시작 전에 끄기를 누른 경우
+          refreshBtn();
+          document.addEventListener('pointerdown', function later() {
+            if (!muted) start();
+            document.removeEventListener('pointerdown', later);
+          }, { capture: true });
+          return;
+        }
+        if (muted) {
+          master.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.15);
+        } else {
+          if (ctx.state === 'suspended') ctx.resume();
+          master.gain.setTargetAtTime(targetVol, ctx.currentTime, 0.15);
+        }
+        refreshBtn();
+      });
+
+      // 탭이 숨겨지면 일시정지, 돌아오면 다시 재생
+      document.addEventListener('visibilitychange', () => {
+        if (!started) return;
+        if (document.hidden) {
+          if (ctx.state === 'running') { suspendedByHide = true; ctx.suspend(); }
+        } else if (suspendedByHide) {
+          suspendedByHide = false;
+          if (!muted) ctx.resume();
+        }
+      });
+
+      // 검증용 상태 확인
+      window.__bgm = {
+        state: () => ({ started, muted, ctxState: ctx ? ctx.state : 'none', vol: targetVol })
+      };
+      refreshBtn();
+    })();
+
   </script>
 </body>
 </html>
