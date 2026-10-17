@@ -720,7 +720,7 @@
       if (!m && u.indexOf('drive.google.com') >= 0) {
         m = u.match(/[?&]id=([A-Za-z0-9_-]+)/);
       }
-      if (m) return 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w1200';
+      if (m) return 'https://lh3.googleusercontent.com/d/' + m[1] + '=w1200';
       return u;
     }
 
